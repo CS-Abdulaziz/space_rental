@@ -14,17 +14,11 @@ class WelcomePage extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-
-          // =====================================================
-          // BACKGROUND
-          // =====================================================
-
           Image.asset(
             'assets/images/spaceora_background.jpeg',
             fit: BoxFit.cover,
           ),
 
-          // طبقة خضراء غامقة فوق الخلفية
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -46,10 +40,6 @@ class WelcomePage extends StatelessWidget {
             ),
           ),
 
-          // =====================================================
-          // GREEN GLOW
-          // =====================================================
-
           Positioned(
             top: 70,
             right: -130,
@@ -68,21 +58,12 @@ class WelcomePage extends StatelessWidget {
             ),
           ),
 
-          // =====================================================
-          // MAIN CONTENT
-          // =====================================================
-
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
                 children: [
-
-                  const Spacer(flex: 5),
-
-                  // =================================================
-                  // SPACEOra
-                  // =================================================
+                  const Spacer(flex: 4),
 
                   RichText(
                     textAlign: TextAlign.center,
@@ -92,62 +73,58 @@ class WelcomePage extends StatelessWidget {
                           text: 'Space',
                           style: TextStyle(
                             color: Colors.white,
+                            fontFamily: 'Georgia',
                             fontSize: 48,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -1.8,
+                            fontWeight: FontWeight.w500,
+                            fontStyle: FontStyle.italic,
+                            letterSpacing: -2.0,
                           ),
                         ),
                         TextSpan(
                           text: 'Ora',
                           style: TextStyle(
                             color: lime,
+                            fontFamily: 'Georgia',
                             fontSize: 48,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -1.8,
+                            fontWeight: FontWeight.w500,
+                            fontStyle: FontStyle.italic,
+                            letterSpacing: -2.0,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 14),
-
-                  // =================================================
-                  // TAGLINE
-                  // =================================================
+                  const SizedBox(height: 10),
 
                   Text(
                     'Find. Book. Make the most\nof your space.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.82),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w300,
-                      height: 1.45,
-                      letterSpacing: 1.0,
+                      color: Colors.white.withOpacity(0.88),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w400,
+                      height: 1.35,
+                      letterSpacing: 0.7,
                     ),
                   ),
 
-                  const SizedBox(height: 38),
-
-                  // =================================================
-                  // SPACE TYPES
-                  // =================================================
+                  const SizedBox(height: 28),
 
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
                       _spaceType(
                         icon: Icons.local_parking_rounded,
                         title: 'Parking',
                       ),
-
+                      const SizedBox(width: 10),
                       _spaceType(
                         icon: Icons.inventory_2_outlined,
                         title: 'Storage',
                       ),
-
+                      const SizedBox(width: 10),
                       _spaceType(
                         icon: Icons.home_work_outlined,
                         title: 'Basements',
@@ -156,64 +133,43 @@ class WelcomePage extends StatelessWidget {
                     ],
                   ),
 
-                  const Spacer(flex: 5),
-
-                  // =================================================
-                  // LOGIN BUTTON
-                  // =================================================
+                  const Spacer(flex: 4),
 
                   _primaryButton(
                     icon: Icons.person_outline_rounded,
                     text: 'Log In',
-                    onTap: () {
-                      // بنربطه بصفحة Login بعد ما نضبط التصميم
-                    },
+                    onTap: () {},
                   ),
 
-                  const SizedBox(height: 15),
-
-                  // =================================================
-                  // SIGN UP BUTTON
-                  // =================================================
+                  const SizedBox(height: 12),
 
                   _secondaryButton(
                     icon: Icons.person_add_alt_1_outlined,
                     text: 'Sign Up',
-                    onTap: () {
-                      // بنربطه بصفحة Sign Up بعد ما نضبط التصميم
-                    },
+                    onTap: () {},
                   ),
 
-                  const SizedBox(height: 30),
-
-                  // =================================================
-                  // GUEST
-                  // =================================================
+                  const SizedBox(height: 24),
 
                   Row(
                     children: [
-
                       Expanded(
                         child: Container(
                           height: 1,
                           color: Colors.white.withOpacity(0.20),
                         ),
                       ),
-
                       Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
                           'Or continue as Guest',
                           style: TextStyle(
-                            color: lime.withOpacity(0.70),
-                            fontSize: 14,
+                            color: lime.withOpacity(0.78),
+                            fontSize: 13,
                             fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
-
                       Expanded(
                         child: Container(
                           height: 1,
@@ -223,7 +179,7 @@ class WelcomePage extends StatelessWidget {
                     ],
                   ),
 
-                  const Spacer(flex: 2),
+                  const Spacer(flex: 1),
                 ],
               ),
             ),
@@ -233,71 +189,63 @@ class WelcomePage extends StatelessWidget {
     );
   }
 
-  // =============================================================
-  // SPACE TYPE
-  // =============================================================
-
   static Widget _spaceType({
     required IconData icon,
     required String title,
     String? secondLine,
   }) {
-    return Column(
-      children: [
-
-        Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            color: const Color(0xFF082719).withOpacity(0.72),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: lime.withOpacity(0.32),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: lime.withOpacity(0.12),
-                blurRadius: 20,
-                spreadRadius: 1,
+    return SizedBox(
+      width: 90,
+      child: Column(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: const Color(0xFF082719).withOpacity(0.72),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: lime.withOpacity(0.35),
+                width: 1,
               ),
-            ],
+              boxShadow: [
+                BoxShadow(
+                  color: lime.withOpacity(0.16),
+                  blurRadius: 20,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: lime,
+              size: 28,
+            ),
           ),
-          child: Icon(
-            icon,
-            color: lime,
-            size: 28,
-          ),
-        ),
-
-        const SizedBox(height: 9),
-
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-
-        if (secondLine != null)
+          const SizedBox(height: 7),
           Text(
-            secondLine,
+            title,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
           ),
-      ],
+          if (secondLine != null)
+            Text(
+              secondLine,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+        ],
+      ),
     );
   }
-
-  // =============================================================
-  // PRIMARY BUTTON
-  // =============================================================
 
   static Widget _primaryButton({
     required IconData icon,
@@ -307,7 +255,7 @@ class WelcomePage extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 68,
+        height: 64,
         width: double.infinity,
         decoration: BoxDecoration(
           color: lime,
@@ -322,44 +270,33 @@ class WelcomePage extends StatelessWidget {
         ),
         child: Row(
           children: [
-
-            const SizedBox(width: 30),
-
-            Icon(
-              icon,
+            const SizedBox(width: 28),
+            const Icon(
+              Icons.person_outline_rounded,
               color: Colors.black,
-              size: 29,
+              size: 28,
             ),
-
             const Spacer(),
-
             Text(
               text,
               style: const TextStyle(
                 color: Colors.black,
-                fontSize: 21,
+                fontSize: 20,
                 fontWeight: FontWeight.w600,
               ),
             ),
-
             const Spacer(),
-
             const Icon(
               Icons.arrow_forward_rounded,
               color: Colors.black,
               size: 30,
             ),
-
-            const SizedBox(width: 30),
+            const SizedBox(width: 28),
           ],
         ),
       ),
     );
   }
-
-  // =============================================================
-  // SECONDARY BUTTON
-  // =============================================================
 
   static Widget _secondaryButton({
     required IconData icon,
@@ -376,7 +313,7 @@ class WelcomePage extends StatelessWidget {
             sigmaY: 12,
           ),
           child: Container(
-            height: 68,
+            height: 64,
             width: double.infinity,
             decoration: BoxDecoration(
               color: const Color(0xFF0B321F).withOpacity(0.58),
@@ -388,35 +325,28 @@ class WelcomePage extends StatelessWidget {
             ),
             child: Row(
               children: [
-
-                const SizedBox(width: 30),
-
+                const SizedBox(width: 28),
                 Icon(
                   icon,
                   color: lime,
-                  size: 29,
+                  size: 28,
                 ),
-
                 const Spacer(),
-
                 Text(
                   text,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 21,
+                    fontSize: 20,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-
                 const Spacer(),
-
                 const Icon(
                   Icons.arrow_forward_rounded,
                   color: lime,
                   size: 30,
                 ),
-
-                const SizedBox(width: 30),
+                const SizedBox(width: 28),
               ],
             ),
           ),
@@ -424,10 +354,6 @@ class WelcomePage extends StatelessWidget {
       ),
     );
   }
-
-  // =============================================================
-  // GLOW
-  // =============================================================
 
   static Widget _glow({
     required double size,
