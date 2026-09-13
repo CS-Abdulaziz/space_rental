@@ -20,7 +20,7 @@ class WelcomePage extends StatelessWidget {
           // =====================================================
 
           Image.asset(
-            'assets/images/',
+            'assets/images/spaceora_background.jpeg',
             fit: BoxFit.cover,
           ),
 
