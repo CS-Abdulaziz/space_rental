@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:space_rental/screens/auth/login_page.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -190,7 +191,7 @@ class _SignupPageState extends State<SignupPage> {
 
                     Center(
                       child: Text(
-                        'Find. Book. Make the most of your space.',
+                        'Turn empty space into ingoing income',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: darkBrown.withOpacity(0.78),
@@ -416,7 +417,12 @@ class _SignupPageState extends State<SignupPage> {
                     Center(
                       child: GestureDetector(
                         onTap: () {
-                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginPage(),
+                            ),
+                          );
                         },
                         child: RichText(
                           text: TextSpan(
