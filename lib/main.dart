@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'screens/auth/login_page.dart';
 import 'screens/auth/signup_page.dart';
 import 'screens/renter/renter_home.dart';
+import 'screens/owner/owner_home.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,42 +25,22 @@ class SpaceOraApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SpaceOra',
+
       theme: ThemeData(
         brightness: Brightness.light,
         useMaterial3: true,
         fontFamily: 'Georgia',
       ),
-      home:  SignupPage(),
+
+      home: SignupPage(),
 
       routes: {
-        '/renter': (context) => 
-         RenterHomePage(),
+        '/renter': (context) => RenterHomePage(),
 
-        '/owner': (context) => const PlaceholderPage(
-          title: 'Owner Home',
-        ),
+        '/login': (context) => LoginPage(),
+
+        '/owner': (context) => const OwnerHomePage(),
       },
-    );
-  }
-}
-
-class PlaceholderPage extends StatelessWidget {
-  final String title;
-
-  const PlaceholderPage({
-    super.key,
-    required this.title,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: Center(
-        child: Text(title),
-      ),
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../auth/login_page.dart';
 import 'booking_payment.dart';
 
 class RenterHomePage extends StatefulWidget {
@@ -25,6 +25,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
   String userName = 'User';
   String userEmail = '';
 
+  final TextEditingController searchController = TextEditingController();
+  String searchText = '';
+
   final categories = [
     {'name': 'All', 'icon': Icons.apps},
     {'name': 'Parking', 'icon': Icons.local_parking},
@@ -37,6 +40,12 @@ class _RenterHomePageState extends State<RenterHomePage> {
   void initState() {
     super.initState();
     loadData();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   Future<void> loadData() async {
@@ -60,11 +69,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
           userName =
               (profileResponse['full_name'] ?? 'User').toString();
 
-          if ((profileResponse['email'] ?? '')
-              .toString()
-              .isNotEmpty) {
-            userEmail =
-                profileResponse['email'].toString();
+          if ((profileResponse['email'] ?? '').toString().isNotEmpty) {
+            userEmail = profileResponse['email'].toString();
           }
         }
       }
@@ -135,8 +141,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
         setState(() {
           savedSpaces.removeWhere(
-            (item) =>
-                item['space_id'].toString() == spaceId,
+            (item) => item['space_id'].toString() == spaceId,
           );
         });
       } else {
@@ -156,18 +161,41 @@ class _RenterHomePageState extends State<RenterHomePage> {
     }
   }
 
-  List<Map<String, dynamic>> get filteredSpaces {
-    if (selectedCategory == 'All') {
-      return spaces;
-    }
+  // =========================================================
+  // FILTER + SEARCH
+  // =========================================================
 
+  List<Map<String, dynamic>> get filteredSpaces {
     return spaces.where((space) {
       final type = (space['type'] ?? '')
           .toString()
           .trim()
           .toLowerCase();
 
-      return type == selectedCategory.toLowerCase();
+      final title = (space['title'] ?? '')
+          .toString()
+          .toLowerCase();
+
+      final address = (space['address'] ?? '')
+          .toString()
+          .toLowerCase();
+
+      final description = (space['description'] ?? '')
+          .toString()
+          .toLowerCase();
+
+      final categoryMatch =
+          selectedCategory == 'All' ||
+          type == selectedCategory.toLowerCase();
+
+      final searchMatch =
+          searchText.isEmpty ||
+          title.contains(searchText) ||
+          type.contains(searchText) ||
+          address.contains(searchText) ||
+          description.contains(searchText);
+
+      return categoryMatch && searchMatch;
     }).toList();
   }
 
@@ -178,8 +206,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
       for (final image in images) {
         final url = image['image_url'];
 
-        if (url != null &&
-            url.toString().trim().isNotEmpty) {
+        if (url != null && url.toString().trim().isNotEmpty) {
           return url.toString();
         }
       }
@@ -294,12 +321,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
         ),
         children: [
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'SpaceOra',
@@ -323,8 +348,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
               ),
               CircleAvatar(
                 radius: 24,
-                backgroundColor:
-                    const Color(0xffe8dfd4),
+                backgroundColor: const Color(0xffe8dfd4),
                 child: const Icon(
                   Icons.person_outline,
                   color: Color(0xff76563d),
@@ -335,23 +359,28 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
           const SizedBox(height: 25),
 
+          // SEARCH
           Container(
             height: 52,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius:
-                  BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: const TextField(
-              decoration: InputDecoration(
+            child: TextField(
+              controller: searchController,
+              onChanged: (value) {
+                setState(() {
+                  searchText = value.trim().toLowerCase();
+                });
+              },
+              decoration: const InputDecoration(
                 prefixIcon: Icon(
                   Icons.search,
                   color: Color(0xff76563d),
                 ),
                 hintText: 'Search spaces...',
                 border: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.symmetric(
+                contentPadding: EdgeInsets.symmetric(
                   vertical: 15,
                 ),
               ),
@@ -368,17 +397,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
               separatorBuilder: (_, __) =>
                   const SizedBox(width: 10),
               itemBuilder: (context, index) {
-                final category =
-                    categories[index];
+                final category = categories[index];
 
-                final name =
-                    category['name'] as String;
-
-                final icon =
-                    category['icon'] as IconData;
-
-                final selected =
-                    selectedCategory == name;
+                final name = category['name'] as String;
+                final icon = category['icon'] as IconData;
+                final selected = selectedCategory == name;
 
                 return GestureDetector(
                   onTap: () {
@@ -387,16 +410,14 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     });
                   },
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 17,
                     ),
                     decoration: BoxDecoration(
                       color: selected
                           ? const Color(0xff76563d)
                           : Colors.white,
-                      borderRadius:
-                          BorderRadius.circular(22),
+                      borderRadius: BorderRadius.circular(22),
                     ),
                     child: Row(
                       children: [
@@ -405,9 +426,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           size: 18,
                           color: selected
                               ? Colors.white
-                              : const Color(
-                                  0xff76563d,
-                                ),
+                              : const Color(0xff76563d),
                         ),
                         const SizedBox(width: 7),
                         Text(
@@ -415,11 +434,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           style: TextStyle(
                             color: selected
                                 ? Colors.white
-                                : const Color(
-                                    0xff76563d,
-                                  ),
-                            fontWeight:
-                                FontWeight.w600,
+                                : const Color(0xff76563d),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -433,8 +449,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
           const SizedBox(height: 28),
 
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
                 'Available Spaces',
@@ -468,8 +483,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
               padding: const EdgeInsets.all(35),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius:
-                    BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(20),
               ),
               child: const Column(
                 children: [
@@ -483,8 +497,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     'No spaces found',
                     style: TextStyle(
                       fontSize: 17,
-                      fontWeight:
-                          FontWeight.w600,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -499,72 +512,60 @@ class _RenterHomePageState extends State<RenterHomePage> {
     );
   }
 
-  Widget buildSpaceCard(
-      Map<String, dynamic> space) {
+  Widget buildSpaceCard(Map<String, dynamic> space) {
     final id = space['id'].toString();
 
-    final imageUrl =
-        getSpaceImage(space);
-
-    final fallback =
-        getFallbackImage(space);
+    final imageUrl = getSpaceImage(space);
+    final fallback = getFallbackImage(space);
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                BookingPaymentPage(
+            builder: (_) => BookingPaymentPage(
               space: space,
             ),
           ),
         );
       },
       child: Container(
-        margin:
-            const EdgeInsets.only(bottom: 18),
+        margin: const EdgeInsets.only(bottom: 18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius:
-              BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color:
-                  Colors.black.withOpacity(0.05),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 12,
-              offset:
-                  const Offset(0, 5),
+              offset: const Offset(0, 5),
             ),
           ],
         ),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(
+                  borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(22),
                   ),
                   child: imageUrl.isNotEmpty
                       ? Image.network(
                           imageUrl,
                           height: 190,
-                          width:
-                              double.infinity,
+                          width: double.infinity,
                           fit: BoxFit.cover,
-                          errorBuilder:
-                              (context,
-                                  error,
-                                  stackTrace) {
+                          errorBuilder: (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
                             return Image.asset(
                               fallback,
                               height: 190,
-                              width:
-                                  double.infinity,
+                              width: double.infinity,
                               fit: BoxFit.cover,
                             );
                           },
@@ -572,8 +573,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                       : Image.asset(
                           fallback,
                           height: 190,
-                          width:
-                              double.infinity,
+                          width: double.infinity,
                           fit: BoxFit.cover,
                         ),
                 ),
@@ -582,17 +582,13 @@ class _RenterHomePageState extends State<RenterHomePage> {
                   top: 12,
                   right: 12,
                   child: GestureDetector(
-                    onTap: () =>
-                        toggleSaved(id),
+                    onTap: () => toggleSaved(id),
                     child: Container(
                       width: 40,
                       height: 40,
-                      decoration:
-                          BoxDecoration(
-                        color: Colors.white
-                            .withOpacity(0.95),
-                        shape:
-                            BoxShape.circle,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.95),
+                        shape: BoxShape.circle,
                       ),
                       child: Icon(
                         isSaved(id)
@@ -600,9 +596,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                             : Icons.favorite_border,
                         color: isSaved(id)
                             ? Colors.redAccent
-                            : const Color(
-                                0xff76563d,
-                              ),
+                            : const Color(0xff76563d),
                       ),
                     ),
                   ),
@@ -613,19 +607,13 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     top: 14,
                     left: 14,
                     child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 6,
                       ),
-                      decoration:
-                          BoxDecoration(
-                        color: Colors.white
-                            .withOpacity(0.95),
-                        borderRadius:
-                            BorderRadius.circular(
-                          20,
-                        ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Row(
                         children: [
@@ -639,8 +627,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                             'Verified',
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight:
-                                  FontWeight.w600,
+                              fontWeight: FontWeight.w600,
                               color: Colors.green,
                             ),
                           ),
@@ -652,21 +639,16 @@ class _RenterHomePageState extends State<RenterHomePage> {
             ),
 
             Padding(
-              padding:
-                  const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    space['title'] ??
-                        'Available Space',
+                    space['title'] ?? 'Available Space',
                     style: const TextStyle(
                       fontSize: 19,
-                      fontWeight:
-                          FontWeight.bold,
-                      color:
-                          Color(0xff3f3329),
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xff3f3329),
                     ),
                   ),
 
@@ -677,16 +659,13 @@ class _RenterHomePageState extends State<RenterHomePage> {
                       const Icon(
                         Icons.location_on_outlined,
                         size: 17,
-                        color:
-                            Color(0xff76563d),
+                        color: Color(0xff76563d),
                       ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          space['address'] ??
-                              'Riyadh',
-                          style:
-                              const TextStyle(
+                          space['address'] ?? 'Riyadh',
+                          style: const TextStyle(
                             color: Colors.grey,
                             fontSize: 13,
                           ),
@@ -700,32 +679,20 @@ class _RenterHomePageState extends State<RenterHomePage> {
                   Row(
                     children: [
                       Container(
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 6,
                         ),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              const Color(
-                            0xfff0e9e0,
-                          ),
-                          borderRadius:
-                              BorderRadius
-                                  .circular(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xfff0e9e0),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          space['type'] ??
-                              'Other',
-                          style:
-                              const TextStyle(
-                            color:
-                                Color(0xff76563d),
+                          space['type'] ?? 'Other',
+                          style: const TextStyle(
+                            color: Color(0xff76563d),
                             fontSize: 12,
-                            fontWeight:
-                                FontWeight.w600,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -734,12 +701,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                       Text(
                         getPrice(space),
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight.bold,
-                          color:
-                              Color(0xff76563d),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xff76563d),
                           fontSize: 14,
                         ),
                       ),
@@ -760,14 +724,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
   Widget buildSaved() {
     final saved = spaces.where((space) {
-      return isSaved(
-        space['id'].toString(),
-      );
+      return isSaved(space['id'].toString());
     }).toList();
 
     return ListView(
-      padding:
-          const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       children: [
         const Text(
           'Saved Spaces',
@@ -784,8 +745,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
         if (saved.isEmpty)
           const Padding(
-            padding:
-                EdgeInsets.only(top: 100),
+            padding: EdgeInsets.only(top: 100),
             child: Center(
               child: Column(
                 children: [
@@ -808,8 +768,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
           )
         else
           ...saved.map(
-            (space) =>
-                buildSpaceCard(space),
+            (space) => buildSpaceCard(space),
           ),
       ],
     );
@@ -853,8 +812,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
         if (bookings.isEmpty)
           const Padding(
-            padding:
-                EdgeInsets.only(top: 100),
+            padding: EdgeInsets.only(top: 100),
             child: Center(
               child: Column(
                 children: [
@@ -877,8 +835,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
           )
         else
           ...bookings.map(
-            (booking) =>
-                buildBookingCard(booking),
+            (booking) => buildBookingCard(booking),
           ),
       ],
     );
@@ -901,13 +858,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
         : 'Other';
 
     final rentalType =
-        (booking['rental_type'] ?? 'daily')
-            .toString();
+        (booking['rental_type'] ?? 'daily').toString();
 
     final status =
-        (booking['status'] ?? 'pending')
-            .toString()
-            .toLowerCase();
+        (booking['status'] ?? 'pending').toString().toLowerCase();
 
     final startDate =
         booking['start_date']?.toString() ?? '-';
@@ -935,8 +889,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
     if (status == 'confirmed') {
       statusColor = Colors.green;
     } else if (status == 'completed') {
-      statusColor =
-          const Color(0xff6f8f72);
+      statusColor = const Color(0xff6f8f72);
     } else if (status == 'cancelled') {
       statusColor = Colors.redAccent;
     } else {
@@ -947,40 +900,31 @@ class _RenterHomePageState extends State<RenterHomePage> {
         rentalType.toLowerCase() == 'monthly';
 
     return Container(
-      margin:
-          const EdgeInsets.only(bottom: 18),
+      margin: const EdgeInsets.only(bottom: 18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color:
-                Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 12,
-            offset:
-                const Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
-
-          // HEADER
           Container(
             width: double.infinity,
-            padding:
-                const EdgeInsets.fromLTRB(
+            padding: const EdgeInsets.fromLTRB(
               18,
               17,
               18,
               17,
             ),
-            decoration:
-                const BoxDecoration(
+            decoration: const BoxDecoration(
               color: Color(0xff76563d),
-              borderRadius:
-                  BorderRadius.vertical(
+              borderRadius: BorderRadius.vertical(
                 top: Radius.circular(24),
               ),
             ),
@@ -989,14 +933,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                 Container(
                   width: 48,
                   height: 48,
-                  decoration:
-                      BoxDecoration(
-                    color: Colors.white
-                        .withOpacity(0.16),
-                    borderRadius:
-                        BorderRadius.circular(
-                      15,
-                    ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(15),
                   ),
                   child: const Icon(
                     Icons.home_work_outlined,
@@ -1015,14 +954,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
                       Text(
                         title,
                         maxLines: 1,
-                        overflow:
-                            TextOverflow.ellipsis,
-                        style:
-                            const TextStyle(
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
-                          fontWeight:
-                              FontWeight.bold,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
 
@@ -1033,8 +969,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           const Icon(
                             Icons.location_on_outlined,
                             size: 15,
-                            color:
-                                Colors.white70,
+                            color: Colors.white70,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -1042,12 +977,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                               address,
                               maxLines: 1,
                               overflow:
-                                  TextOverflow
-                                      .ellipsis,
-                              style:
-                                  const TextStyle(
-                                color:
-                                    Colors.white70,
+                                  TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white70,
                                 fontSize: 13,
                               ),
                             ),
@@ -1061,54 +993,39 @@ class _RenterHomePageState extends State<RenterHomePage> {
             ),
           ),
 
-          // BODY
           Padding(
-            padding:
-                const EdgeInsets.all(17),
+            padding: const EdgeInsets.all(17),
             child: Column(
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-
-                // TYPE + RENTAL + STATUS
                 Row(
                   children: [
                     Container(
                       padding:
-                          const EdgeInsets
-                              .symmetric(
+                          const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 7,
                       ),
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            const Color(
-                          0xfff3eee8,
-                        ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xfff3eee8),
                         borderRadius:
-                            BorderRadius
-                                .circular(12),
+                            BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
                           const Icon(
                             Icons.category_outlined,
                             size: 15,
-                            color:
-                                Color(0xff76563d),
+                            color: Color(0xff76563d),
                           ),
-                          const SizedBox(
-                              width: 5),
+                          const SizedBox(width: 5),
                           Text(
                             type,
-                            style:
-                                const TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color: Color(
-                                  0xff76563d),
-                              fontWeight:
-                                  FontWeight.w600,
+                              color: Color(0xff76563d),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -1119,41 +1036,29 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                     Container(
                       padding:
-                          const EdgeInsets
-                              .symmetric(
+                          const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 7,
                       ),
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            const Color(
-                          0xfff3eee8,
-                        ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xfff3eee8),
                         borderRadius:
-                            BorderRadius
-                                .circular(12),
+                            BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
                           const Icon(
-                            Icons
-                                .calendar_month_outlined,
+                            Icons.calendar_month_outlined,
                             size: 15,
-                            color:
-                                Color(0xff76563d),
+                            color: Color(0xff76563d),
                           ),
-                          const SizedBox(
-                              width: 5),
+                          const SizedBox(width: 5),
                           Text(
                             rentalType,
-                            style:
-                                const TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color: Color(
-                                  0xff76563d),
-                              fontWeight:
-                                  FontWeight.w600,
+                              color: Color(0xff76563d),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -1175,8 +1080,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           status.substring(1),
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight:
-                            FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                         color: statusColor,
                       ),
                     ),
@@ -1189,64 +1093,45 @@ class _RenterHomePageState extends State<RenterHomePage> {
                   'Rental period',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                     color: Color(0xff5f4633),
                   ),
                 ),
 
                 const SizedBox(height: 10),
 
-                // DATES
                 Row(
                   children: [
                     Expanded(
                       child: Container(
-                        padding:
-                            const EdgeInsets
-                                .all(13),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              const Color(
-                            0xfffaf8f5,
-                          ),
+                        padding: const EdgeInsets.all(13),
+                        decoration: BoxDecoration(
+                          color: const Color(0xfffaf8f5),
                           borderRadius:
-                              BorderRadius
-                                  .circular(15),
+                              BorderRadius.circular(15),
                           border: Border.all(
-                            color:
-                                const Color(
-                              0xffeee7df,
-                            ),
+                            color: const Color(0xffeee7df),
                           ),
                         ),
                         child: Column(
                           crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
+                              CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'Start',
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color:
-                                    Colors.grey,
+                                color: Colors.grey,
                               ),
                             ),
-                            const SizedBox(
-                                height: 5),
+                            const SizedBox(height: 5),
                             Text(
                               startDate,
-                              style:
-                                  const TextStyle(
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight:
-                                    FontWeight
-                                        .w600,
-                                color: Color(
-                                    0xff3f3329),
+                                    FontWeight.w600,
+                                color: Color(0xff3f3329),
                               ),
                             ),
                           ],
@@ -1256,64 +1141,44 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                     const Padding(
                       padding:
-                          EdgeInsets.symmetric(
-                        horizontal: 9,
-                      ),
+                          EdgeInsets.symmetric(horizontal: 9),
                       child: Icon(
                         Icons.arrow_forward,
                         size: 19,
-                        color:
-                            Color(0xff76563d),
+                        color: Color(0xff76563d),
                       ),
                     ),
 
                     Expanded(
                       child: Container(
-                        padding:
-                            const EdgeInsets
-                                .all(13),
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              const Color(
-                            0xfffaf8f5,
-                          ),
+                        padding: const EdgeInsets.all(13),
+                        decoration: BoxDecoration(
+                          color: const Color(0xfffaf8f5),
                           borderRadius:
-                              BorderRadius
-                                  .circular(15),
+                              BorderRadius.circular(15),
                           border: Border.all(
-                            color:
-                                const Color(
-                              0xffeee7df,
-                            ),
+                            color: const Color(0xffeee7df),
                           ),
                         ),
                         child: Column(
                           crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
+                              CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'End',
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color:
-                                    Colors.grey,
+                                color: Colors.grey,
                               ),
                             ),
-                            const SizedBox(
-                                height: 5),
+                            const SizedBox(height: 5),
                             Text(
                               endDate,
-                              style:
-                                  const TextStyle(
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight:
-                                    FontWeight
-                                        .w600,
-                                color: Color(
-                                    0xff3f3329),
+                                    FontWeight.w600,
+                                color: Color(0xff3f3329),
                               ),
                             ),
                           ],
@@ -1325,19 +1190,12 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                 const SizedBox(height: 14),
 
-                // PRICE DETAILS
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.all(15),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        const Color(0xfffaf8f5),
-                    borderRadius:
-                        BorderRadius.circular(
-                      17,
-                    ),
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: const Color(0xfffaf8f5),
+                    borderRadius: BorderRadius.circular(17),
                   ),
                   child: Column(
                     children: [
@@ -1360,39 +1218,30 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                       const Padding(
                         padding:
-                            EdgeInsets.symmetric(
-                          vertical: 8,
-                        ),
+                            EdgeInsets.symmetric(vertical: 8),
                         child: Divider(
-                          color:
-                              Color(0xffddd4ca),
+                          color: Color(0xffddd4ca),
                         ),
                       ),
 
                       Row(
                         mainAxisAlignment:
-                            MainAxisAlignment
-                                .spaceBetween,
+                            MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
                             'Total',
                             style: TextStyle(
                               fontSize: 17,
-                              fontWeight:
-                                  FontWeight.w600,
-                              color: Color(
-                                  0xff3f3329),
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xff3f3329),
                             ),
                           ),
                           Text(
                             '$totalPrice SAR',
-                            style:
-                                const TextStyle(
+                            style: const TextStyle(
                               fontSize: 19,
-                              fontWeight:
-                                  FontWeight.bold,
-                              color: Color(
-                                  0xff76563d),
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xff76563d),
                             ),
                           ),
                         ],
@@ -1403,34 +1252,25 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                 const SizedBox(height: 13),
 
-                // CONFIRMED MESSAGE
                 if (status == 'confirmed')
                   Container(
                     width: double.infinity,
                     padding:
-                        const EdgeInsets
-                            .symmetric(
+                        const EdgeInsets.symmetric(
                       horizontal: 13,
                       vertical: 11,
                     ),
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          const Color(
-                        0xffedf5eb,
-                      ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xffedf5eb),
                       borderRadius:
-                          BorderRadius.circular(
-                        13,
-                      ),
+                          BorderRadius.circular(13),
                     ),
                     child: const Row(
                       children: [
                         Icon(
                           Icons.check_circle,
                           size: 18,
-                          color:
-                              Color(0xff5f8b62),
+                          color: Color(0xff5f8b62),
                         ),
                         SizedBox(width: 8),
                         Expanded(
@@ -1438,10 +1278,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
                             'Your booking is confirmed and saved successfully.',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Color(
-                                  0xff527457),
-                              fontWeight:
-                                  FontWeight.w500,
+                              color: Color(0xff527457),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -1461,8 +1299,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
     String value,
   ) {
     return Padding(
-      padding:
-          const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         mainAxisAlignment:
             MainAxisAlignment.spaceBetween,
@@ -1478,8 +1315,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
             value,
             style: const TextStyle(
               fontSize: 13,
-              fontWeight:
-                  FontWeight.w600,
+              fontWeight: FontWeight.w600,
               color: Color(0xff3f3329),
             ),
           ),
@@ -1494,8 +1330,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
   Widget buildAccount() {
     return ListView(
-      padding:
-          const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       children: [
         const Text(
           'My Account',
@@ -1511,26 +1346,20 @@ class _RenterHomePageState extends State<RenterHomePage> {
         const SizedBox(height: 22),
 
         Container(
-          padding:
-              const EdgeInsets.all(20),
-          decoration:
-              BoxDecoration(
-            color:
-                const Color(0xff76563d),
-            borderRadius:
-                BorderRadius.circular(24),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xff76563d),
+            borderRadius: BorderRadius.circular(24),
           ),
           child: Row(
             children: [
               const CircleAvatar(
                 radius: 34,
-                backgroundColor:
-                    Colors.white,
+                backgroundColor: Colors.white,
                 child: Icon(
                   Icons.person,
                   size: 38,
-                  color:
-                      Color(0xff76563d),
+                  color: Color(0xff76563d),
                 ),
               ),
 
@@ -1544,13 +1373,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     Text(
                       userName,
                       maxLines: 1,
-                      overflow:
-                          TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                         fontSize: 19,
                       ),
                     ),
@@ -1560,12 +1386,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     Text(
                       userEmail,
                       maxLines: 1,
-                      overflow:
-                          TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.white70,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
                         fontSize: 14,
                       ),
                     ),
@@ -1616,6 +1439,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
         const SizedBox(height: 8),
 
+        // LOG OUT
         accountTile(
           Icons.logout,
           'Log Out',
@@ -1625,9 +1449,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
             if (!mounted) return;
 
-            Navigator.pushNamedAndRemoveUntil(
-              context,
-              '/login',
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (context) => const LoginPage(),
+              ),
               (route) => false,
             );
           },
@@ -1643,15 +1468,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
     VoidCallback onTap,
   ) {
     return Container(
-      margin:
-          const EdgeInsets.only(
-        bottom: 11,
-      ),
-      decoration:
-          BoxDecoration(
+      margin: const EdgeInsets.only(bottom: 11),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: ListTile(
         onTap: onTap,
@@ -1663,41 +1483,32 @@ class _RenterHomePageState extends State<RenterHomePage> {
         leading: Container(
           width: 44,
           height: 44,
-          decoration:
-              BoxDecoration(
-            color:
-                const Color(0xfff0e9e0),
-            borderRadius:
-                BorderRadius.circular(13),
+          decoration: BoxDecoration(
+            color: const Color(0xfff0e9e0),
+            borderRadius: BorderRadius.circular(13),
           ),
           child: Icon(
             icon,
-            color:
-                const Color(0xff76563d),
+            color: const Color(0xff76563d),
           ),
         ),
         title: Text(
           title,
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.w600,
-            color:
-                Color(0xff3f3329),
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xff3f3329),
           ),
         ),
         subtitle: Text(
           subtitle,
-          style:
-              const TextStyle(
+          style: const TextStyle(
             fontSize: 12,
-            color: Colors.grey,
+            color: Color.fromARGB(255, 167, 127, 113),
           ),
         ),
-        trailing:
-            const Icon(
+        trailing: const Icon(
           Icons.chevron_right,
-          color: Colors.grey,
+          color: Color.fromARGB(255, 167, 127, 113),
         ),
       ),
     );
