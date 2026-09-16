@@ -141,19 +141,87 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
     });
 
     try {
+      final spaceId = widget.space['id'];
+
+      final selectedStart =
+          startDate!.toIso8601String().split('T').first;
+
+      final selectedEnd =
+          endDate!.toIso8601String().split('T').first;
+
+      // Check existing bookings for this space
+      final existingBookings = await supabase
+          .from('bookings')
+          .select('id, start_date, end_date, status')
+          .eq('space_id', spaceId)
+          .inFilter(
+            'status',
+            ['confirmed', 'pending'],
+          );
+
+      bool alreadyBooked = false;
+
+      final newStart = DateTime.parse(selectedStart);
+      final newEnd = DateTime.parse(selectedEnd);
+
+      for (final booking in existingBookings) {
+        final bookingStart =
+            DateTime.parse(booking['start_date'].toString());
+
+        final bookingEnd =
+            DateTime.parse(booking['end_date'].toString());
+
+        // Check if the new booking overlaps
+        // with an existing booking.
+        if (!newEnd.isBefore(bookingStart) &&
+            !newStart.isAfter(bookingEnd)) {
+          alreadyBooked = true;
+          break;
+        }
+      }
+
+      // Space is already booked
+      if (alreadyBooked) {
+        if (!mounted) return;
+
+        setState(() {
+          processing = false;
+        });
+
+        await showDialog(
+          context: context,
+          builder: (_) {
+            return AlertDialog(
+              title: const Text(
+                'Space Already Booked',
+              ),
+              content: const Text(
+                'This space is already booked for these dates. '
+                'Please choose different dates or another space.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+
+        return;
+      }
+
+      // Create booking
       final booking = await supabase
           .from('bookings')
           .insert({
-            'space_id': widget.space['id'],
+            'space_id': spaceId,
             'renter_id': user.id,
-            'start_date': startDate!
-                .toIso8601String()
-                .split('T')
-                .first,
-            'end_date': endDate!
-                .toIso8601String()
-                .split('T')
-                .first,
+            'start_date': selectedStart,
+            'end_date': selectedEnd,
             'rental_type': rentalType,
             'total_days': totalDays,
             'price_per_day': dailyPrice,
@@ -167,6 +235,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
       final bookingId = booking['id'];
 
+      // Demo payment
       final transactionReference =
           'DEMO-PAY-${DateTime.now().millisecondsSinceEpoch}';
 
@@ -186,12 +255,15 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         processing = false;
       });
 
+      // Success dialog
       await showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) {
           return AlertDialog(
-            title: const Text('Booking Confirmed'),
+            title: const Text(
+              'Booking Confirmed',
+            ),
             content: Text(
               'Your booking has been confirmed.\n\n'
               'Total: ${totalPrice.toStringAsFixed(2)} SAR',
@@ -210,9 +282,13 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
       if (!mounted) return;
 
-      Navigator.pop(context);
+      // Return true so the previous page
+      // knows that a new booking was created.
+      Navigator.pop(context, true);
     } catch (e) {
-      debugPrint('Booking/payment error: $e');
+      debugPrint(
+        'Booking/payment error: $e',
+      );
 
       if (!mounted) return;
 
@@ -222,7 +298,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Payment failed: $e'),
+          content: Text(
+            'Payment failed: $e',
+          ),
         ),
       );
     }
@@ -246,7 +324,8 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
             ),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Text(
                 title,
@@ -284,7 +363,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         });
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(
+          bottom: 12,
+        ),
         padding: const EdgeInsets.all(17),
         decoration: BoxDecoration(
           color: selected
@@ -310,7 +391,8 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
             ),
             const SizedBox(width: 14),
             Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
@@ -358,9 +440,15 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
+        padding: const EdgeInsets.fromLTRB(
+          18,
+          10,
+          18,
+          30,
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Text(
               widget.space['title'] ?? 'Space',
@@ -396,7 +484,8 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 Expanded(
                   child: ChoiceChip(
                     label: Text(
-                      'Daily • ${dailyPrice.toStringAsFixed(0)} SAR',
+                      'Daily • '
+                      '${dailyPrice.toStringAsFixed(0)} SAR',
                     ),
                     selected: rentalType == 'daily',
                     onSelected: (_) {
@@ -410,7 +499,8 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 Expanded(
                   child: ChoiceChip(
                     label: Text(
-                      'Monthly • ${monthlyPrice.toStringAsFixed(0)} SAR',
+                      'Monthly • '
+                      '${monthlyPrice.toStringAsFixed(0)} SAR',
                     ),
                     selected: rentalType == 'monthly',
                     onSelected: (_) {
@@ -441,7 +531,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                   title: 'Start date',
                   value: startDate == null
                       ? 'Select date'
-                      : '${startDate!.day}/${startDate!.month}/${startDate!.year}',
+                      : '${startDate!.day}/'
+                          '${startDate!.month}/'
+                          '${startDate!.year}',
                   onTap: selectStartDate,
                 ),
                 const SizedBox(width: 12),
@@ -449,7 +541,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                   title: 'End date',
                   value: endDate == null
                       ? 'Select date'
-                      : '${endDate!.day}/${endDate!.month}/${endDate!.year}',
+                      : '${endDate!.day}/'
+                          '${endDate!.month}/'
+                          '${endDate!.year}',
                   onTap: selectEndDate,
                 ),
               ],
@@ -526,19 +620,23 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
               width: double.infinity,
               height: 58,
               child: ElevatedButton(
-                onPressed: processing ? null : confirmPayment,
+                onPressed:
+                    processing ? null : confirmPayment,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff716960),
+                  backgroundColor:
+                      const Color(0xff716960),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius:
+                        BorderRadius.circular(30),
                   ),
                 ),
                 child: processing
                     ? const SizedBox(
                         height: 23,
                         width: 23,
-                        child: CircularProgressIndicator(
+                        child:
+                            CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
@@ -569,7 +667,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           title,
           style: TextStyle(
             fontSize: bold ? 18 : 16,
-            fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+            fontWeight: bold
+                ? FontWeight.w700
+                : FontWeight.normal,
           ),
         ),
         const Spacer(),
@@ -577,7 +677,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           value,
           style: TextStyle(
             fontSize: bold ? 18 : 16,
-            fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+            fontWeight: bold
+                ? FontWeight.w700
+                : FontWeight.normal,
           ),
         ),
       ],

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'my_spaces.dart';
+
 import '../auth/login_page.dart';
-import 'verification.dart';
 import 'add_space.dart';
+import 'owner_profile.dart';
+
 class OwnerHomePage extends StatefulWidget {
   const OwnerHomePage({super.key});
 
@@ -28,16 +29,13 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   double earnings = 0;
 
   RealtimeChannel? bookingsChannel;
-
   late AnimationController animationController;
 
   final Color cream = const Color(0xFFF7F2EA);
   final Color softCream = const Color(0xFFFFFBF5);
   final Color brown = const Color(0xFF765548);
   final Color darkBrown = const Color(0xFF3E2C25);
-  final Color lightBrown = const Color(0xFFC9AA91);
   final Color beige = const Color(0xFFE8D8C8);
-  final Color gold = const Color(0xFFB99362);
 
   @override
   void initState() {
@@ -64,7 +62,14 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     try {
       final user = supabase.auth.currentUser;
 
-      if (user == null) return;
+      if (user == null) {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+        return;
+      }
 
       final profile = await supabase
           .from('profiles')
@@ -94,17 +99,30 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             ascending: false,
           );
 
-      spaces =
-          List<Map<String, dynamic>>.from(
-        spacesResult,
-      );
+      final Map<String, Map<String, dynamic>>
+          uniqueSpaces = {};
+
+      for (final item in spacesResult) {
+        final space =
+            Map<String, dynamic>.from(item);
+
+        final id =
+            space['id']?.toString();
+
+        if (id != null) {
+          uniqueSpaces[id] = space;
+        }
+      }
+
+      spaces = uniqueSpaces.values.toList();
 
       bookings = [];
 
       if (spaces.isNotEmpty) {
         final spaceIds = spaces
             .map(
-              (space) => space['id'].toString(),
+              (space) =>
+                  space['id'].toString(),
             )
             .toList();
 
@@ -122,24 +140,40 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               ascending: true,
             );
 
+        final Map<String, Map<String, dynamic>>
+            uniqueBookings = {};
+
+        for (final item in bookingsResult) {
+          final booking =
+              Map<String, dynamic>.from(item);
+
+          final id =
+              booking['id']?.toString();
+
+          if (id != null) {
+            uniqueBookings[id] = booking;
+          }
+        }
+
         bookings =
-            List<Map<String, dynamic>>.from(
-          bookingsResult,
-        );
+            uniqueBookings.values.toList();
 
         for (final booking in bookings) {
           final renterId =
               booking['renter_id'];
 
           if (renterId != null) {
-            final renter = await supabase
-                .from('profiles')
-                .select('full_name,email')
-                .eq(
-                  'id',
-                  renterId,
-                )
-                .maybeSingle();
+            final renter =
+                await supabase
+                    .from('profiles')
+                    .select(
+                      'full_name,email',
+                    )
+                    .eq(
+                      'id',
+                      renterId,
+                    )
+                    .maybeSingle();
 
             booking['renter_profile'] =
                 renter;
@@ -187,62 +221,18 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   void listenToBookings() {
     bookingsChannel = supabase
         .channel(
-          'owner-bookings-live-${DateTime.now().millisecondsSinceEpoch}',
+          'owner-bookings-live',
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'bookings',
           callback: (payload) {
-            debugPrint(
-              'BOOKING CHANGE: ${payload.eventType}',
-            );
-
             if (!mounted) return;
 
             loadOwnerData(
               showLoading: false,
             );
-
-            if (payload.eventType ==
-                PostgresChangeEvent.insert) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(
-                SnackBar(
-                  behavior:
-                      SnackBarBehavior.floating,
-                  backgroundColor:
-                      darkBrown,
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      18,
-                    ),
-                  ),
-                  content: const Row(
-                    children: [
-                      Icon(
-                        Icons
-                            .notifications_active_rounded,
-                        color: Colors.white,
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'New booking received ✨',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight:
-                                FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
           },
         )
         .subscribe();
@@ -262,36 +252,25 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   }
 
   int get pendingBookings {
-    return bookings
-        .where(
-          (booking) =>
-              booking['status']
-                  ?.toString()
-                  .toLowerCase() ==
-              'pending',
-        )
-        .length;
+    return bookings.where(
+      (booking) {
+        return booking['status']
+                ?.toString()
+                .toLowerCase() ==
+            'pending';
+      },
+    ).length;
   }
 
   int get confirmedBookings {
-    return bookings
-        .where(
-          (booking) =>
-              booking['status']
-                  ?.toString()
-                  .toLowerCase() ==
-              'confirmed',
-        )
-        .length;
-  }
-
-  int get verifiedSpaces {
-    return spaces
-        .where(
-          (space) =>
-              space['verified'] == true,
-        )
-        .length;
+    return bookings.where(
+      (booking) {
+        return booking['status']
+                ?.toString()
+                .toLowerCase() ==
+            'confirmed';
+      },
+    ).length;
   }
 
   String formatPrice(dynamic value) {
@@ -300,10 +279,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               value?.toString() ?? '0',
             ) ??
             0;
-
-    if (number % 1 == 0) {
-      return '${number.toInt()} SAR';
-    }
 
     return '${number.toStringAsFixed(0)} SAR';
   }
@@ -361,9 +336,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   Widget build(BuildContext context) {
     final pages = [
       _homePage(),
-     const MySpacesPage(),
+      _spacesPage(),
       _bookingsPage(),
-      _profilePage(),
+      const OwnerProfilePage(),
     ];
 
     return Scaffold(
@@ -374,7 +349,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             : AnimatedSwitcher(
                 duration:
                     const Duration(
-                  milliseconds: 350,
+                  milliseconds: 300,
                 ),
                 child:
                     pages[selectedIndex],
@@ -403,14 +378,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                     BorderRadius.circular(
                   24,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        brown.withOpacity(.25),
-                    blurRadius: 30,
-                    spreadRadius: 4,
-                  ),
-                ],
               ),
               child: const Icon(
                 Icons.home_work_rounded,
@@ -543,15 +510,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               shape: BoxShape.circle,
               border: Border.all(
                 color: beige,
-                width: 1.5,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      brown.withOpacity(.08),
-                  blurRadius: 15,
-                ),
-              ],
             ),
             child: Icon(
               Icons.person_outline_rounded,
@@ -564,249 +523,138 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   }
 
   Widget _heroCard() {
-    return AnimatedBuilder(
-      animation:
-          animationController,
-      builder: (context, child) {
-        final glow =
-            8 +
-                (animationController
-                        .value *
-                    8);
-
-        return Container(
-          width: double.infinity,
-          height: 300,
-          decoration:
-              BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(
-              32,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    brown.withOpacity(.20),
-                blurRadius:
-                    glow + 15,
-                offset:
-                    const Offset(0, 12),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      height: 300,
+      decoration:
+          BoxDecoration(
+        borderRadius:
+            BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color:
+                brown.withOpacity(.20),
+            blurRadius: 25,
+            offset:
+                const Offset(0, 12),
           ),
-          child: ClipRRect(
-            borderRadius:
-                BorderRadius.circular(
-              32,
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius:
+            BorderRadius.circular(32),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              'assets/images/owner_background.jpeg',
+              fit: BoxFit.cover,
+              errorBuilder:
+                  (_, __, ___) {
+                return Container(
+                  color: darkBrown,
+                );
+              },
             ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(
-                  'assets/images/owner_background.jpeg',
-                  fit: BoxFit.cover,
+            Container(
+              decoration:
+                  BoxDecoration(
+                gradient:
+                    LinearGradient(
+                  begin:
+                      Alignment.topLeft,
+                  end:
+                      Alignment.bottomRight,
+                  colors: [
+                    Colors.black
+                        .withOpacity(.25),
+                    Colors.black
+                        .withOpacity(.65),
+                  ],
                 ),
-
-                Container(
-                  decoration:
-                      BoxDecoration(
-                    gradient:
-                        LinearGradient(
-                      begin:
-                          Alignment.topLeft,
-                      end: Alignment
-                          .bottomRight,
-                      colors: [
-                        Colors.black
-                            .withOpacity(.28),
-                        const Color(
-                          0xff3B2921,
-                        ).withOpacity(.55),
-                        const Color(
-                          0xff241914,
-                        ).withOpacity(.72),
-                      ],
+              ),
+            ),
+            Padding(
+              padding:
+                  const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 7,
                     ),
-                  ),
-                ),
-
-                Positioned(
-                  right: -35,
-                  top: -45,
-                  child: Container(
-                    width: 150,
-                    height: 150,
                     decoration:
                         BoxDecoration(
-                      shape:
-                          BoxShape.circle,
                       color: Colors.white
-                          .withOpacity(.10),
+                          .withOpacity(.15),
+                      borderRadius:
+                          BorderRadius.circular(
+                        30,
+                      ),
+                    ),
+                    child: const Text(
+                      '●  LIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-
-                Positioned(
-                  left: -45,
-                  bottom: -60,
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration:
-                        BoxDecoration(
-                      shape:
-                          BoxShape.circle,
-                      color: gold
-                          .withOpacity(.13),
+                  const Spacer(),
+                  const Text(
+                    'Your spaces are\nworking for you.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Georgia',
+                      fontStyle:
+                          FontStyle.italic,
+                      fontSize: 28,
+                      fontWeight:
+                          FontWeight.bold,
+                      height: 1.15,
                     ),
                   ),
-                ),
-
-                Padding(
-                  padding:
-                      const EdgeInsets.all(
-                    24,
+                  const SizedBox(height: 9),
+                  Text(
+                    'Manage your spaces, bookings '
+                    'and earnings all in one place.',
+                    style: TextStyle(
+                      color: Colors.white
+                          .withOpacity(.82),
+                      fontSize: 12,
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
+                  const SizedBox(height: 17),
+                  Row(
                     children: [
-                      Container(
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal: 11,
-                          vertical: 7,
-                        ),
-                        decoration:
-                            BoxDecoration(
-                          color: Colors.white
-                              .withOpacity(.15),
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            30,
-                          ),
-                          border: Border.all(
-                            color: Colors
-                                .white
-                                .withOpacity(
-                              .18,
-                            ),
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisSize:
-                              MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 7,
-                              height: 7,
-                              child:
-                                  DecoratedBox(
-                                decoration:
-                                    BoxDecoration(
-                                  color:
-                                      Color(
-                                    0xffC8E6C9,
-                                  ),
-                                  shape:
-                                      BoxShape
-                                          .circle,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 7),
-                            Text(
-                              'LIVE',
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors.white,
-                                fontSize: 10,
-                                fontWeight:
-                                    FontWeight
-                                        .bold,
-                                letterSpacing:
-                                    1,
-                              ),
-                            ),
-                          ],
-                        ),
+                      _heroMiniStat(
+                        '${spaces.length}',
+                        'Spaces',
                       ),
-
-                      const Spacer(),
-
-                      const Text(
-                        'Your spaces are\nworking for you.',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontFamily:
-                              'Georgia',
-                          fontStyle:
-                              FontStyle.italic,
-                          fontSize: 28,
-                          fontWeight:
-                              FontWeight.bold,
-                          height: 1.15,
-                        ),
+                      const SizedBox(width: 9),
+                      _heroMiniStat(
+                        '$pendingBookings',
+                        'Pending',
                       ),
-
-                      const SizedBox(
-                        height: 9,
-                      ),
-
-                      Text(
-                        'Manage your spaces, '
-                        'bookings and earnings '
-                        'all in one place.',
-                        style: TextStyle(
-                          color: Colors.white
-                              .withOpacity(
-                            .82,
-                          ),
-                          fontSize: 12,
-                          height: 1.45,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 17,
-                      ),
-
-                      Row(
-                        children: [
-                          _heroMiniStat(
-                            '${spaces.length}',
-                            'Spaces',
-                          ),
-                          const SizedBox(
-                            width: 9,
-                          ),
-                          _heroMiniStat(
-                            '$pendingBookings',
-                            'Pending',
-                          ),
-                          const SizedBox(
-                            width: 9,
-                          ),
-                          _heroMiniStat(
-                            formatPrice(
-                              earnings,
-                            ),
-                            'Earned',
-                          ),
-                        ],
+                      const SizedBox(width: 9),
+                      _heroMiniStat(
+                        formatPrice(earnings),
+                        'Earned',
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
@@ -827,10 +675,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               .withOpacity(.10),
           borderRadius:
               BorderRadius.circular(17),
-          border: Border.all(
-            color: Colors.white
-                .withOpacity(.10),
-          ),
         ),
         child: Column(
           crossAxisAlignment:
@@ -853,7 +697,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               label,
               style: TextStyle(
                 color: Colors.white
-                    .withOpacity(.55),
+                    .withOpacity(.60),
                 fontSize: 10,
               ),
             ),
@@ -867,53 +711,28 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     String title,
     String subtitle,
   ) {
-    return Row(
+    return Column(
       crossAxisAlignment:
-          CrossAxisAlignment.end,
+          CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: darkBrown,
-                  fontSize: 20,
-                  fontWeight:
-                      FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color:
-                      brown.withOpacity(.55),
-                  fontSize: 12,
-                ),
-              ),
-            ],
+        Text(
+          title,
+          style: TextStyle(
+            color: darkBrown,
+            fontSize: 20,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
-        if (title == 'Your Spaces')
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                selectedIndex = 1;
-              });
-            },
-            child: Text(
-              'View all',
-              style: TextStyle(
-                color: brown,
-                fontWeight:
-                    FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
+        const SizedBox(height: 3),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color:
+                brown.withOpacity(.55),
+            fontSize: 12,
           ),
+        ),
       ],
     );
   }
@@ -1044,6 +863,14 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               fontSize: 11,
             ),
           ),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color:
+                  brown.withOpacity(.45),
+              fontSize: 9,
+            ),
+          ),
         ],
       ),
     );
@@ -1091,16 +918,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         space['type']?.toString() ??
             'Other';
 
-    final verified =
-        space['verified'] == true;
-
-    final price =
-        space['daily_price'];
-
-    String imageUrl = '';
-
     final images =
         space['space_images'];
+
+    String imageUrl = '';
 
     if (images is List &&
         images.isNotEmpty) {
@@ -1121,15 +942,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           color:
               beige.withOpacity(.7),
         ),
-        boxShadow: [
-          BoxShadow(
-            color:
-                brown.withOpacity(.06),
-            blurRadius: 18,
-            offset:
-                const Offset(0, 8),
-          ),
-        ],
       ),
       child: ClipRRect(
         borderRadius:
@@ -1138,144 +950,62 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           crossAxisAlignment:
               CrossAxisAlignment.start,
           children: [
-            Stack(
-              children: [
-                SizedBox(
-                  height: 125,
-                  width: double.infinity,
-                  child: imageUrl.isNotEmpty
-                      ? Image.network(
-                          imageUrl,
+            SizedBox(
+              height: 125,
+              width: double.infinity,
+              child: imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder:
+                          (_, __, ___) {
+                        return Image.asset(
+                          fallbackImage(type),
                           fit: BoxFit.cover,
-                          errorBuilder:
-                              (_, __, ___) {
-                            return Image.asset(
-                              fallbackImage(
-                                type,
-                              ),
-                              fit: BoxFit.cover,
-                            );
-                          },
-                        )
-                      : Image.asset(
-                          fallbackImage(
-                            type,
-                          ),
-                          fit: BoxFit.cover,
-                        ),
-                ),
-
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal: 9,
-                      vertical: 6,
+                        );
+                      },
+                    )
+                  : Image.asset(
+                      fallbackImage(type),
+                      fit: BoxFit.cover,
                     ),
-                    decoration:
-                        BoxDecoration(
-                      color: Colors.white
-                          .withOpacity(.88),
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        20,
-                      ),
-                    ),
-                    child: Text(
-                      '${spaceTypeIcon(type)} $type',
-                      style:
-                          TextStyle(
-                        color: darkBrown,
-                        fontSize: 10,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-
-                if (verified)
-                  Positioned(
-                    right: 10,
-                    top: 10,
-                    child: Container(
-                      height: 29,
-                      width: 29,
-                      decoration:
-                          BoxDecoration(
-                        color: darkBrown,
-                        shape:
-                            BoxShape.circle,
-                      ),
-                      child:
-                          const Icon(
-                        Icons
-                            .verified_rounded,
-                        color:
-                            Colors.white,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-              ],
             ),
-
             Padding(
               padding:
-                  const EdgeInsets.all(
-                13,
-              ),
+                  const EdgeInsets.all(13),
               child: Column(
                 crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
+                    CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
                     maxLines: 1,
                     overflow:
                         TextOverflow.ellipsis,
-                    style:
-                        TextStyle(
+                    style: TextStyle(
                       color: darkBrown,
                       fontWeight:
                           FontWeight.bold,
                       fontSize: 14,
                     ),
                   ),
-                  const SizedBox(
-                    height: 7,
+                  const SizedBox(height: 7),
+                  Text(
+                    '${spaceTypeIcon(type)} $type',
+                    style: TextStyle(
+                      color: brown,
+                      fontSize: 11,
+                    ),
                   ),
-                  Row(
-                    children: [
-                      Text(
-                        formatPrice(
-                          price,
-                        ),
-                        style:
-                            TextStyle(
-                          color: brown,
-                          fontWeight:
-                              FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        ' / day',
-                        style:
-                            TextStyle(
-                          color: brown
-                              .withOpacity(
-                            .5,
-                          ),
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 5),
+                  Text(
+                    '${formatPrice(space['daily_price'])} / day',
+                    style: TextStyle(
+                      color: darkBrown,
+                      fontWeight:
+                          FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -1285,100 +1015,92 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       ),
     );
   }
-  // =========================================================
-  // BOOKING PREVIEW
-  // =========================================================
 
   Widget _bookingPreview() {
     if (bookings.isEmpty) {
       return _emptyCard(
         Icons.calendar_month_outlined,
         'No bookings yet',
-        'New renter bookings will appear here automatically.',
+        'New renter bookings will appear here.',
       );
     }
 
-    final recent = bookings.length > 3
-        ? bookings.take(3).toList()
-        : bookings;
+    final recent =
+        bookings.take(3).toList();
 
     return Column(
       children: recent.map(
         (booking) {
           return Padding(
-            padding: const EdgeInsets.only(
+            padding:
+                const EdgeInsets.only(
               bottom: 11,
             ),
-            child: _bookingCard(booking),
+            child:
+                _bookingCard(booking),
           );
         },
       ).toList(),
     );
   }
 
-  // =========================================================
-  // BOOKING CARD
-  // =========================================================
-
   Widget _bookingCard(
     Map<String, dynamic> booking,
   ) {
-    final space = booking['spaces'];
-    final renter = booking['renter_profile'];
+    final space =
+        booking['spaces'];
+
+    final renter =
+        booking['renter_profile'];
 
     final title =
-        space?['title']?.toString() ?? 'Space';
+        space?['title']
+                ?.toString() ??
+            'Space';
 
     final renterName =
-        renter?['full_name']?.toString() ?? 'Renter';
+        renter?['full_name']
+                ?.toString() ??
+            'Renter';
 
     final status =
-        booking['status']?.toString() ?? 'pending';
-
-    final total = booking['total_price'];
-
-    final isConfirmed = status == 'confirmed';
-    final isPending = status == 'pending';
-
-    final statusColor = isConfirmed
-        ? const Color(0xFF65735B)
-        : isPending
-            ? const Color(0xFFA47C4B)
-            : const Color(0xFF8C6255);
+        booking['status']
+                ?.toString() ??
+            'pending';
 
     return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
+      padding:
+          const EdgeInsets.all(15),
+      decoration:
+          BoxDecoration(
         color: softCream,
-        borderRadius: BorderRadius.circular(23),
+        borderRadius:
+            BorderRadius.circular(23),
         border: Border.all(
-          color: beige.withOpacity(.8),
+          color:
+              beige.withOpacity(.8),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: brown.withOpacity(.045),
-            blurRadius: 16,
-            offset: const Offset(0, 7),
-          ),
-        ],
       ),
       child: Row(
         children: [
           Container(
             height: 52,
             width: 52,
-            decoration: BoxDecoration(
-              color: beige.withOpacity(.65),
-              borderRadius: BorderRadius.circular(17),
+            decoration:
+                BoxDecoration(
+              color:
+                  beige.withOpacity(.65),
+              borderRadius:
+                  BorderRadius.circular(
+                17,
+              ),
             ),
             child: Icon(
               Icons.event_available_rounded,
               color: darkBrown,
             ),
           ),
-
           const SizedBox(width: 13),
-
           Expanded(
             child: Column(
               crossAxisAlignment:
@@ -1387,73 +1109,62 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 Text(
                   title,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  overflow:
+                      TextOverflow.ellipsis,
                   style: TextStyle(
                     color: darkBrown,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                     fontSize: 14,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   renterName,
                   style: TextStyle(
-                    color: brown.withOpacity(.65),
+                    color:
+                        brown.withOpacity(.65),
                     fontSize: 11,
                   ),
                 ),
-
-                const SizedBox(height: 5),
-
+                const SizedBox(height: 4),
                 Text(
                   '${formatDate(booking['start_date'])}'
                   ' → '
                   '${formatDate(booking['end_date'])}',
                   style: TextStyle(
-                    color: brown.withOpacity(.5),
+                    color:
+                        brown.withOpacity(.5),
                     fontSize: 10,
                   ),
                 ),
               ],
             ),
           ),
-
           const SizedBox(width: 8),
-
           Column(
             crossAxisAlignment:
                 CrossAxisAlignment.end,
             children: [
               Text(
-                formatPrice(total),
+                formatPrice(
+                  booking['total_price'],
+                ),
                 style: TextStyle(
                   color: darkBrown,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                  fontWeight:
+                      FontWeight.bold,
+                  fontSize: 12,
                 ),
               ),
-
-              const SizedBox(height: 6),
-
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status.toUpperCase(),
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: .6,
-                  ),
+              const SizedBox(height: 5),
+              Text(
+                status.toUpperCase(),
+                style: TextStyle(
+                  color: brown,
+                  fontSize: 8,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ],
@@ -1463,26 +1174,26 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
-  // =========================================================
-  // SPACES PAGE
-  // =========================================================
-
   Widget _spacesPage() {
     return RefreshIndicator(
       color: darkBrown,
-      onRefresh: () => loadOwnerData(
+      onRefresh: () =>
+          loadOwnerData(
         showLoading: false,
       ),
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
+        physics:
+            const AlwaysScrollableScrollPhysics(),
+        padding:
+            const EdgeInsets.fromLTRB(
           20,
           20,
           20,
           35,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             _pageHeader(
               'My Spaces',
@@ -1500,69 +1211,165 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               )
             else
               ...spaces.map(
-                (space) => Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 14,
+                (space) {
+                  return Padding(
+                    padding:
+                        const EdgeInsets.only(
+                      bottom: 14,
+                    ),
+                    child:
+                        _largeSpaceCard(space),
+                  );
+                },
+              ),
+
+            const SizedBox(height: 10),
+
+            GestureDetector(
+              onTap: () async {
+                final result =
+                    await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const AddSpacePage(),
                   ),
-                  child: _largeSpaceCard(space),
+                );
+
+                if (result == true) {
+                  await loadOwnerData(
+                    showLoading: false,
+                  );
+                }
+              },
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
+                decoration:
+                    BoxDecoration(
+                  color: darkBrown,
+                  borderRadius:
+                      BorderRadius.circular(22),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration:
+                          BoxDecoration(
+                        color: Colors.white
+                            .withOpacity(.15),
+                        borderRadius:
+                            BorderRadius.circular(
+                          14,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Add New Space',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'List a new space and start earning',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: Colors.white70,
+                      size: 16,
+                    ),
+                  ],
                 ),
               ),
+            ),
+
+            const SizedBox(height: 10),
           ],
         ),
       ),
     );
   }
 
-  // =========================================================
-  // LARGE SPACE CARD
-  // =========================================================
-
   Widget _largeSpaceCard(
     Map<String, dynamic> space,
   ) {
     final title =
-        space['title']?.toString() ?? 'Untitled';
+        space['title']?.toString() ??
+            'Untitled';
 
     final type =
-        space['type']?.toString() ?? 'Other';
+        space['type']?.toString() ??
+            'Other';
 
     final address =
-        space['address']?.toString() ?? '';
+        space['address']?.toString() ??
+            '';
 
     final verified =
         space['verified'] == true;
 
+    final images =
+        space['space_images'];
+
     String imageUrl = '';
 
-    final images = space['space_images'];
-
-    if (images is List && images.isNotEmpty) {
+    if (images is List &&
+        images.isNotEmpty) {
       imageUrl =
-          images.first['image_url']?.toString() ?? '';
+          images.first['image_url']
+                  ?.toString() ??
+              '';
     }
 
     return Container(
       height: 145,
-      decoration: BoxDecoration(
+      decoration:
+          BoxDecoration(
         color: softCream,
-        borderRadius: BorderRadius.circular(27),
+        borderRadius:
+            BorderRadius.circular(27),
         border: Border.all(
-          color: beige.withOpacity(.8),
+          color:
+              beige.withOpacity(.8),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: brown.withOpacity(.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(27),
-              bottomLeft: Radius.circular(27),
+            borderRadius:
+                const BorderRadius.only(
+              topLeft:
+                  Radius.circular(27),
+              bottomLeft:
+                  Radius.circular(27),
             ),
             child: SizedBox(
               width: 125,
@@ -1571,7 +1378,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   ? Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) {
+                      errorBuilder:
+                          (_, __, ___) {
                         return Image.asset(
                           fallbackImage(type),
                           fit: BoxFit.cover,
@@ -1584,10 +1392,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                     ),
             ),
           ),
-
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(15),
+              padding:
+                  const EdgeInsets.all(15),
               child: Column(
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
@@ -1608,90 +1416,48 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                           ),
                         ),
                       ),
-
                       if (verified)
                         Icon(
-                          Icons.verified_rounded,
+                          Icons
+                              .verified_rounded,
                           color: brown,
                           size: 18,
                         ),
                     ],
                   ),
-
                   const SizedBox(height: 7),
-
                   Text(
-                    '$type  •  ${spaceTypeIcon(type)}',
+                    '${spaceTypeIcon(type)} $type',
                     style: TextStyle(
                       color: brown,
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                      fontWeight:
+                          FontWeight.w600,
                     ),
                   ),
-
-                  const SizedBox(height: 6),
-
-                  if (address.isNotEmpty)
+                  if (address.isNotEmpty) ...[
+                    const SizedBox(height: 6),
                     Text(
                       address,
                       maxLines: 1,
                       overflow:
                           TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: brown.withOpacity(.55),
+                        color:
+                            brown.withOpacity(.55),
                         fontSize: 10,
                       ),
                     ),
-
+                  ],
                   const Spacer(),
-
-                  Row(
-                    children: [
-                      Text(
-                        formatPrice(
-                          space['daily_price'],
-                        ),
-                        style: TextStyle(
-                          color: darkBrown,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-
-                      Text(
-                        ' / day',
-                        style: TextStyle(
-                          color: brown.withOpacity(.5),
-                          fontSize: 10,
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              beige.withOpacity(.55),
-                          borderRadius:
-                              BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          space['status']?.toString() ??
-                              'active',
-                          style: TextStyle(
-                            color: darkBrown,
-                            fontSize: 9,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    '${formatPrice(space['daily_price'])} / day',
+                    style: TextStyle(
+                      color: darkBrown,
+                      fontWeight:
+                          FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -1701,27 +1467,26 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       ),
     );
   }
-
-  // =========================================================
-  // BOOKINGS PAGE
-  // =========================================================
-
   Widget _bookingsPage() {
     return RefreshIndicator(
       color: darkBrown,
-      onRefresh: () => loadOwnerData(
+      onRefresh: () =>
+          loadOwnerData(
         showLoading: false,
       ),
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
+        physics:
+            const AlwaysScrollableScrollPhysics(),
+        padding:
+            const EdgeInsets.fromLTRB(
           20,
           20,
           20,
           35,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             _pageHeader(
               'Bookings',
@@ -1729,9 +1494,47 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               Icons.calendar_month_outlined,
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
-            _liveBookingBanner(),
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.all(17),
+              decoration:
+                  BoxDecoration(
+                color: darkBrown,
+                borderRadius:
+                    BorderRadius.circular(22),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons
+                        .wifi_tethering_rounded,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'New bookings appear automatically.',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$pendingBookings pending',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight:
+                          FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
             const SizedBox(height: 18),
 
@@ -1739,16 +1542,22 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               _emptyCard(
                 Icons.event_busy_outlined,
                 'No bookings yet',
-                'When a renter books your space, it will appear here automatically.',
+                'When a renter books your space, it will appear here.',
               )
             else
               ...bookings.map(
-                (booking) => Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 13,
-                  ),
-                  child: _fullBookingCard(booking),
-                ),
+                (booking) {
+                  return Padding(
+                    padding:
+                        const EdgeInsets.only(
+                      bottom: 13,
+                    ),
+                    child:
+                        _fullBookingCard(
+                      booking,
+                    ),
+                  );
+                },
               ),
           ],
         ),
@@ -1756,120 +1565,52 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
-  // =========================================================
-  // LIVE BANNER
-  // =========================================================
-
-  Widget _liveBookingBanner() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: darkBrown,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 42,
-            width: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.wifi_tethering_rounded,
-              color: Colors.white,
-              size: 21,
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Live booking updates',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'New bookings appear automatically.',
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Container(
-            height: 9,
-            width: 9,
-            decoration: const BoxDecoration(
-              color: Color(0xFFBDE7C2),
-              shape: BoxShape.circle,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =========================================================
-  // FULL BOOKING CARD
-  // =========================================================
-
   Widget _fullBookingCard(
     Map<String, dynamic> booking,
   ) {
-    final space = booking['spaces'];
-    final renter = booking['renter_profile'];
+    final space =
+        booking['spaces'];
+
+    final renter =
+        booking['renter_profile'];
 
     final title =
-        space?['title']?.toString() ?? 'Space';
+        space?['title']
+                ?.toString() ??
+            'Space';
 
     final address =
-        space?['address']?.toString() ?? '';
+        space?['address']
+                ?.toString() ??
+            '';
 
     final renterName =
-        renter?['full_name']?.toString() ?? 'Renter';
+        renter?['full_name']
+                ?.toString() ??
+            'Renter';
 
     final renterEmail =
-        renter?['email']?.toString() ?? '';
+        renter?['email']
+                ?.toString() ??
+            '';
 
     final status =
-        booking['status']?.toString() ?? 'pending';
-
-    final statusColor =
-        status == 'confirmed'
-            ? const Color(0xFF65735B)
-            : status == 'pending'
-                ? const Color(0xFFA47C4B)
-                : const Color(0xFF8C6255);
+        booking['status']
+                ?.toString() ??
+            'pending';
 
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
+      padding:
+          const EdgeInsets.all(18),
+      decoration:
+          BoxDecoration(
         color: softCream,
-        borderRadius: BorderRadius.circular(27),
+        borderRadius:
+            BorderRadius.circular(27),
         border: Border.all(
-          color: beige.withOpacity(.8),
+          color:
+              beige.withOpacity(.8),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: brown.withOpacity(.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment:
@@ -1880,13 +1621,18 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               Container(
                 height: 47,
                 width: 47,
-                decoration: BoxDecoration(
-                  color: beige.withOpacity(.65),
+                decoration:
+                    BoxDecoration(
+                  color:
+                      beige.withOpacity(.65),
                   borderRadius:
-                      BorderRadius.circular(16),
+                      BorderRadius.circular(
+                    16,
+                  ),
                 ),
                 child: Icon(
-                  Icons.home_work_outlined,
+                  Icons
+                      .home_work_outlined,
                   color: darkBrown,
                 ),
               ),
@@ -1902,13 +1648,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                       title,
                       style: TextStyle(
                         color: darkBrown,
-                        fontWeight: FontWeight.bold,
+                        fontWeight:
+                            FontWeight.bold,
                         fontSize: 15,
                       ),
                     ),
-
-                    if (address.isNotEmpty) ...[
-                      const SizedBox(height: 3),
+                    if (address.isNotEmpty)
                       Text(
                         address,
                         maxLines: 1,
@@ -1920,43 +1665,30 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                           fontSize: 10,
                         ),
                       ),
-                    ],
                   ],
                 ),
               ),
 
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color:
-                      statusColor.withOpacity(.12),
-                  borderRadius:
-                      BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status.toUpperCase(),
-                  style: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 9,
-                  ),
+              Text(
+                status.toUpperCase(),
+                style: TextStyle(
+                  color: brown,
+                  fontSize: 9,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 17),
+          const SizedBox(height: 15),
 
           Divider(
-            color: beige.withOpacity(.7),
-            height: 1,
+            color:
+                beige.withOpacity(.7),
           ),
 
-          const SizedBox(height: 15),
+          const SizedBox(height: 12),
 
           Row(
             children: [
@@ -1982,7 +1714,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                         fontSize: 12,
                       ),
                     ),
-
                     if (renterEmail.isNotEmpty)
                       Text(
                         renterEmail,
@@ -2002,14 +1733,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 ),
                 style: TextStyle(
                   color: darkBrown,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                   fontSize: 14,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 13),
+          const SizedBox(height: 14),
 
           Row(
             children: [
@@ -2022,7 +1754,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   ),
                 ),
               ),
-
               Expanded(
                 child: _dateInfo(
                   Icons.logout_rounded,
@@ -2039,10 +1770,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
-  // =========================================================
-  // DATE INFO
-  // =========================================================
-
   Widget _dateInfo(
     IconData icon,
     String title,
@@ -2053,7 +1780,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         Icon(
           icon,
           size: 15,
-          color: brown.withOpacity(.65),
+          color:
+              brown.withOpacity(.65),
         ),
         const SizedBox(width: 6),
         Column(
@@ -2063,7 +1791,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             Text(
               title,
               style: TextStyle(
-                color: brown.withOpacity(.45),
+                color:
+                    brown.withOpacity(.45),
                 fontSize: 9,
               ),
             ),
@@ -2072,7 +1801,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               style: TextStyle(
                 color: darkBrown,
                 fontSize: 10,
-                fontWeight: FontWeight.w600,
+                fontWeight:
+                    FontWeight.w600,
               ),
             ),
           ],
@@ -2080,339 +1810,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       ],
     );
   }
-
-  // =========================================================
-  // PROFILE PAGE
-  // =========================================================
-
-  Widget _profilePage() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        20,
-        20,
-        35,
-      ),
-      child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-        children: [
-          _pageHeader(
-            'Profile',
-            'Your owner account',
-            Icons.person_outline_rounded,
-          ),
-
-          const SizedBox(height: 20),
-
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  darkBrown,
-                  brown,
-                ],
-              ),
-              borderRadius:
-                  BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: brown.withOpacity(.18),
-                  blurRadius: 25,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  height: 66,
-                  width: 66,
-                  decoration: BoxDecoration(
-                    color:
-                        Colors.white.withOpacity(.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color:
-                          Colors.white.withOpacity(.15),
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                ),
-
-                const SizedBox(width: 15),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ownerName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'Georgia',
-                          fontStyle:
-                              FontStyle.italic,
-                          fontSize: 21,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 5),
-
-                      Text(
-                        ownerEmail,
-                        maxLines: 1,
-                        overflow:
-                            TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white
-                              .withOpacity(.65),
-                          fontSize: 11,
-                        ),
-                      ),
-
-                      if (ownerPhone.isNotEmpty)
-                        ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            ownerPhone,
-                            style: TextStyle(
-                              color: Colors.white
-                                  .withOpacity(.55),
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          Text(
-            'Owner Tools',
-            style: TextStyle(
-              color: darkBrown,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          _profileOption(
-            Icons.home_work_outlined,
-            'My Spaces',
-            'Manage your listed spaces',
-            () {
-              setState(() {
-                selectedIndex = 1;
-              });
-            },
-          ),
-
-          _profileOption(
-            Icons.calendar_month_outlined,
-            'Bookings',
-            'View renter bookings',
-            () {
-              setState(() {
-                selectedIndex = 2;
-              });
-            },
-          ),
-
-          _profileOption(
-            Icons.verified_user_outlined,
-            'Verification',
-            'Verify your identity and space',
-            () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const VerificationPage(),
-                ),
-              );
-            },
-          ),
-
-          _profileOption(
-            Icons.payments_outlined,
-            'Earnings',
-            '${formatPrice(earnings)} earned so far',
-            () {},
-          ),
-
-          _profileOption(
-            Icons.settings_outlined,
-            'Settings',
-            'Account preferences',
-            () {},
-          ),
-
-          const SizedBox(height: 15),
-
-          GestureDetector(
-            onTap: _logout,
-            child: Container(
-              width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 17,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1E2DA),
-                borderRadius:
-                    BorderRadius.circular(22),
-                border: Border.all(
-                  color: const Color(0xFFE2CFC5),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    height: 40,
-                    width: 40,
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          const Color(0xFFE7CFC3),
-                      borderRadius:
-                          BorderRadius.circular(13),
-                    ),
-                    child: const Icon(
-                      Icons.logout_rounded,
-                      color: Color(0xFF80564A),
-                      size: 20,
-                    ),
-                  ),
-
-                  const SizedBox(width: 13),
-
-                  const Expanded(
-                    child: Text(
-                      'Log Out',
-                      style: TextStyle(
-                        color: Color(0xFF80564A),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-
-                  const Icon(
-                    Icons
-                        .arrow_forward_ios_rounded,
-                    color: Color(0xFF80564A),
-                    size: 15,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =========================================================
-  // PROFILE OPTION
-  // =========================================================
-
-  Widget _profileOption(
-    IconData icon,
-    String title,
-    String subtitle,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin:
-            const EdgeInsets.only(bottom: 11),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: softCream,
-          borderRadius:
-              BorderRadius.circular(22),
-          border: Border.all(
-            color: beige.withOpacity(.8),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              height: 43,
-              width: 43,
-              decoration: BoxDecoration(
-                color: beige.withOpacity(.55),
-                borderRadius:
-                    BorderRadius.circular(14),
-              ),
-              child: Icon(
-                icon,
-                color: darkBrown,
-                size: 20,
-              ),
-            ),
-
-            const SizedBox(width: 13),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: darkBrown,
-                      fontWeight:
-                          FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color:
-                          brown.withOpacity(.5),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color:
-                  brown.withOpacity(.35),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // =========================================================
-  // PAGE HEADER
-  // =========================================================
 
   Widget _pageHeader(
     String title,
@@ -2424,16 +1821,11 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         Container(
           height: 48,
           width: 48,
-          decoration: BoxDecoration(
+          decoration:
+              BoxDecoration(
             color: darkBrown,
             borderRadius:
                 BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: brown.withOpacity(.18),
-                blurRadius: 15,
-              ),
-            ],
           ),
           child: Icon(
             icon,
@@ -2461,9 +1853,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                       FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 3),
-
               Text(
                 subtitle,
                 style: TextStyle(
@@ -2475,38 +1865,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             ],
           ),
         ),
-
-        GestureDetector(
-          onTap: () =>
-              loadOwnerData(
-            showLoading: false,
-          ),
-          child: Container(
-            height: 42,
-            width: 42,
-            decoration:
-                BoxDecoration(
-              color: softCream,
-              borderRadius:
-                  BorderRadius.circular(14),
-              border: Border.all(
-                color: beige,
-              ),
-            ),
-            child: Icon(
-              Icons.refresh_rounded,
-              color: darkBrown,
-              size: 20,
-            ),
-          ),
-        ),
       ],
     );
   }
-
-  // =========================================================
-  // EMPTY CARD
-  // =========================================================
 
   Widget _emptyCard(
     IconData icon,
@@ -2515,16 +1876,19 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   ) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
+      padding:
+          const EdgeInsets.symmetric(
         vertical: 30,
         horizontal: 22,
       ),
-      decoration: BoxDecoration(
+      decoration:
+          BoxDecoration(
         color: softCream,
         borderRadius:
             BorderRadius.circular(27),
         border: Border.all(
-          color: beige.withOpacity(.8),
+          color:
+              beige.withOpacity(.8),
         ),
       ),
       child: Column(
@@ -2532,8 +1896,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           Container(
             height: 58,
             width: 58,
-            decoration: BoxDecoration(
-              color: beige.withOpacity(.55),
+            decoration:
+                BoxDecoration(
+              color:
+                  beige.withOpacity(.55),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -2549,7 +1915,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             title,
             style: TextStyle(
               color: darkBrown,
-              fontWeight: FontWeight.bold,
+              fontWeight:
+                  FontWeight.bold,
               fontSize: 15,
             ),
           ),
@@ -2558,11 +1925,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
 
           Text(
             subtitle,
-            textAlign: TextAlign.center,
+            textAlign:
+                TextAlign.center,
             style: TextStyle(
-              color: brown.withOpacity(.5),
+              color:
+                  brown.withOpacity(.5),
               fontSize: 11,
-              height: 1.4,
             ),
           ),
         ],
@@ -2570,19 +1938,18 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
-  // =========================================================
-  // BOTTOM NAVIGATION
-  // =========================================================
-
   Widget _bottomNavigation() {
     return Container(
-      decoration: BoxDecoration(
+      decoration:
+          BoxDecoration(
         color: softCream,
         boxShadow: [
           BoxShadow(
-            color: brown.withOpacity(.08),
+            color:
+                brown.withOpacity(.08),
             blurRadius: 25,
-            offset: const Offset(0, -5),
+            offset:
+                const Offset(0, -5),
           ),
         ],
       ),
@@ -2597,7 +1964,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           ),
           child: Row(
             mainAxisAlignment:
-                MainAxisAlignment.spaceAround,
+                MainAxisAlignment
+                    .spaceAround,
             children: [
               _navItem(
                 0,
@@ -2630,10 +1998,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
-  // =========================================================
-  // NAV ITEM
-  // =========================================================
-
   Widget _navItem(
     int index,
     IconData icon,
@@ -2651,13 +2015,17 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       },
       child: AnimatedContainer(
         duration:
-            const Duration(milliseconds: 250),
+            const Duration(
+          milliseconds: 250,
+        ),
         padding:
             EdgeInsets.symmetric(
-          horizontal: active ? 15 : 11,
+          horizontal:
+              active ? 15 : 11,
           vertical: 8,
         ),
-        decoration: BoxDecoration(
+        decoration:
+            BoxDecoration(
           color: active
               ? beige.withOpacity(.65)
               : Colors.transparent,
@@ -2675,7 +2043,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   : brown.withOpacity(.45),
               size: 21,
             ),
-
             if (active) ...[
               const SizedBox(width: 7),
               Text(
@@ -2694,10 +2061,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
-  // =========================================================
-  // LOGOUT
-  // =========================================================
-
   Future<void> _logout() async {
     await supabase.auth.signOut();
 
@@ -2706,7 +2069,8 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     Navigator.of(context)
         .pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => const LoginPage(),
+        builder: (_) =>
+            const LoginPage(),
       ),
       (route) => false,
     );

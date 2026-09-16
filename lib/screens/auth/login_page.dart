@@ -37,10 +37,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final supabase = Supabase.instance.client;
 
-      await supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
+      await supabase.auth.signInWithPassword(email: email, password: password);
 
       final user = supabase.auth.currentUser;
 
@@ -117,31 +114,19 @@ class _LoginPageState extends State<LoginPage> {
           ),
 
           Positioned.fill(
-            child: Container(
-              color: background.withOpacity(0.80),
-            ),
+            child: Container(color: background.withOpacity(0.80)),
           ),
 
           Positioned.fill(
             child: BackdropFilter(
-              filter: ImageFilter.blur(
-                sigmaX: 1.2,
-                sigmaY: 1.2,
-              ),
-              child: Container(
-                color: Colors.transparent,
-              ),
+              filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
+              child: Container(color: Colors.transparent),
             ),
           ),
 
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                32,
-                55,
-                32,
-                30,
-              ),
+              padding: const EdgeInsets.fromLTRB(32, 55, 32, 30),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -307,7 +292,8 @@ class _LoginPageState extends State<LoginPage> {
                   Center(
                     child: GestureDetector(
                       onTap: () {
-                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/signup',);
+                       
                       },
                       child: RichText(
                         text: TextSpan(
@@ -353,23 +339,13 @@ class _LoginPageState extends State<LoginPage> {
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
-      style: const TextStyle(
-        color: darkBrown,
-        fontSize: 14,
-      ),
+      style: const TextStyle(color: darkBrown, fontSize: 14),
       decoration: InputDecoration(
         filled: true,
         fillColor: Colors.white.withOpacity(0.58),
         hintText: hint,
-        hintStyle: TextStyle(
-          color: darkBrown.withOpacity(0.47),
-          fontSize: 14,
-        ),
-        prefixIcon: Icon(
-          icon,
-          color: darkBrown.withOpacity(0.65),
-          size: 21,
-        ),
+        hintStyle: TextStyle(color: darkBrown.withOpacity(0.47), fontSize: 14),
+        prefixIcon: Icon(icon, color: darkBrown.withOpacity(0.65), size: 21),
         suffixIcon: suffix,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 17,
@@ -377,17 +353,11 @@ class _LoginPageState extends State<LoginPage> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(11),
-          borderSide: const BorderSide(
-            color: border,
-            width: 1,
-          ),
+          borderSide: const BorderSide(color: border, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(11),
-          borderSide: const BorderSide(
-            color: brown,
-            width: 1.2,
-          ),
+          borderSide: const BorderSide(color: brown, width: 1.2),
         ),
       ),
     );

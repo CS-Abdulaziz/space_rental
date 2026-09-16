@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../auth/login_page.dart';
 import 'booking_payment.dart';
 
@@ -24,8 +25,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
   String userName = 'User';
   String userEmail = '';
+  String userPhone = '';
 
-  final TextEditingController searchController = TextEditingController();
+  final TextEditingController searchController =
+      TextEditingController();
+
   String searchText = '';
 
   final categories = [
@@ -48,10 +52,16 @@ class _RenterHomePageState extends State<RenterHomePage> {
     super.dispose();
   }
 
+  // =========================================================
+  // LOAD DATA
+  // =========================================================
+
   Future<void> loadData() async {
-    setState(() {
-      loading = true;
-    });
+    if (mounted) {
+      setState(() {
+        loading = true;
+      });
+    }
 
     try {
       final user = supabase.auth.currentUser;
@@ -61,7 +71,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
         final profileResponse = await supabase
             .from('profiles')
-            .select('full_name, email')
+            .select('full_name, email, phone')
             .eq('id', user.id)
             .maybeSingle();
 
@@ -69,12 +79,19 @@ class _RenterHomePageState extends State<RenterHomePage> {
           userName =
               (profileResponse['full_name'] ?? 'User').toString();
 
-          if ((profileResponse['email'] ?? '').toString().isNotEmpty) {
-            userEmail = profileResponse['email'].toString();
+          if ((profileResponse['email'] ?? '')
+              .toString()
+              .isNotEmpty) {
+            userEmail =
+                profileResponse['email'].toString();
           }
+
+          userPhone =
+              (profileResponse['phone'] ?? '').toString();
         }
       }
 
+      // SPACES
       final spacesResponse = await supabase
           .from('spaces')
           .select('*, space_images(*)')
@@ -85,30 +102,43 @@ class _RenterHomePageState extends State<RenterHomePage> {
           List<Map<String, dynamic>>.from(spacesResponse);
 
       if (user != null) {
+        // SAVED SPACES
         final savedResponse = await supabase
             .from('saved_spaces')
             .select('space_id')
             .eq('user_id', user.id);
 
-        savedSpaces =
+        final loadedSavedSpaces =
             List<Map<String, dynamic>>.from(savedResponse);
 
+        // BOOKINGS
         final bookingResponse = await supabase
             .from('bookings')
             .select('*, spaces(*)')
             .eq('renter_id', user.id)
             .order('start_date', ascending: false);
 
-        bookings =
+        final loadedBookings =
             List<Map<String, dynamic>>.from(bookingResponse);
+
+        if (!mounted) return;
+
+        setState(() {
+          spaces = loadedSpaces;
+          savedSpaces = loadedSavedSpaces;
+          bookings = loadedBookings;
+          loading = false;
+        });
+      } else {
+        if (!mounted) return;
+
+        setState(() {
+          spaces = loadedSpaces;
+          savedSpaces = [];
+          bookings = [];
+          loading = false;
+        });
       }
-
-      if (!mounted) return;
-
-      setState(() {
-        spaces = loadedSpaces;
-        loading = false;
-      });
     } catch (e) {
       debugPrint('Error loading data: $e');
 
@@ -119,6 +149,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
       });
     }
   }
+
+  // =========================================================
+  // SAVED
+  // =========================================================
 
   bool isSaved(String spaceId) {
     return savedSpaces.any(
@@ -139,9 +173,12 @@ class _RenterHomePageState extends State<RenterHomePage> {
             .eq('user_id', user.id)
             .eq('space_id', spaceId);
 
+        if (!mounted) return;
+
         setState(() {
           savedSpaces.removeWhere(
-            (item) => item['space_id'].toString() == spaceId,
+            (item) =>
+                item['space_id'].toString() == spaceId,
           );
         });
       } else {
@@ -149,6 +186,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
           'user_id': user.id,
           'space_id': spaceId,
         });
+
+        if (!mounted) return;
 
         setState(() {
           savedSpaces.add({
@@ -199,6 +238,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
     }).toList();
   }
 
+  // =========================================================
+  // SPACE IMAGE
+  // =========================================================
+
   String getSpaceImage(Map<String, dynamic> space) {
     final images = space['space_images'];
 
@@ -206,7 +249,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
       for (final image in images) {
         final url = image['image_url'];
 
-        if (url != null && url.toString().trim().isNotEmpty) {
+        if (url != null &&
+            url.toString().trim().isNotEmpty) {
           return url.toString();
         }
       }
@@ -252,6 +296,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
     return 'Price unavailable';
   }
+
+  // =========================================================
+  // BUILD
+  // =========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -321,10 +369,12 @@ class _RenterHomePageState extends State<RenterHomePage> {
         ),
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
             children: [
               const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Text(
                     'SpaceOra',
@@ -348,7 +398,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
               ),
               CircleAvatar(
                 radius: 24,
-                backgroundColor: const Color(0xffe8dfd4),
+                backgroundColor:
+                    Color(0xffe8dfd4),
                 child: const Icon(
                   Icons.person_outline,
                   color: Color(0xff76563d),
@@ -359,28 +410,31 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
           const SizedBox(height: 25),
 
-          // SEARCH
           Container(
             height: 52,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius:
+                  BorderRadius.circular(16),
             ),
             child: TextField(
               controller: searchController,
               onChanged: (value) {
                 setState(() {
-                  searchText = value.trim().toLowerCase();
+                  searchText =
+                      value.trim().toLowerCase();
                 });
               },
-              decoration: const InputDecoration(
+              decoration:
+                  const InputDecoration(
                 prefixIcon: Icon(
                   Icons.search,
                   color: Color(0xff76563d),
                 ),
                 hintText: 'Search spaces...',
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
+                contentPadding:
+                    EdgeInsets.symmetric(
                   vertical: 15,
                 ),
               ),
@@ -392,16 +446,24 @@ class _RenterHomePageState extends State<RenterHomePage> {
           SizedBox(
             height: 42,
             child: ListView.separated(
-              scrollDirection: Axis.horizontal,
+              scrollDirection:
+                  Axis.horizontal,
               itemCount: categories.length,
               separatorBuilder: (_, __) =>
                   const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                final category = categories[index];
+              itemBuilder:
+                  (context, index) {
+                final category =
+                    categories[index];
 
-                final name = category['name'] as String;
-                final icon = category['icon'] as IconData;
-                final selected = selectedCategory == name;
+                final name =
+                    category['name'] as String;
+
+                final icon =
+                    category['icon'] as IconData;
+
+                final selected =
+                    selectedCategory == name;
 
                 return GestureDetector(
                   onTap: () {
@@ -410,14 +472,21 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
+                    padding:
+                        const EdgeInsets.symmetric(
                       horizontal: 17,
                     ),
-                    decoration: BoxDecoration(
+                    decoration:
+                        BoxDecoration(
                       color: selected
-                          ? const Color(0xff76563d)
+                          ? const Color(
+                              0xff76563d,
+                            )
                           : Colors.white,
-                      borderRadius: BorderRadius.circular(22),
+                      borderRadius:
+                          BorderRadius.circular(
+                        22,
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -426,7 +495,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           size: 18,
                           color: selected
                               ? Colors.white
-                              : const Color(0xff76563d),
+                              : const Color(
+                                  0xff76563d,
+                                ),
                         ),
                         const SizedBox(width: 7),
                         Text(
@@ -434,8 +505,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           style: TextStyle(
                             color: selected
                                 ? Colors.white
-                                : const Color(0xff76563d),
-                            fontWeight: FontWeight.w600,
+                                : const Color(
+                                    0xff76563d,
+                                  ),
+                            fontWeight:
+                                FontWeight.w600,
                           ),
                         ),
                       ],
@@ -449,13 +523,15 @@ class _RenterHomePageState extends State<RenterHomePage> {
           const SizedBox(height: 28),
 
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
             children: [
               const Text(
                 'Available Spaces',
                 style: TextStyle(
                   fontSize: 22,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                   color: Color(0xff3f3329),
                 ),
               ),
@@ -475,15 +551,18 @@ class _RenterHomePageState extends State<RenterHomePage> {
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
+                child:
+                    CircularProgressIndicator(),
               ),
             )
           else if (filteredSpaces.isEmpty)
             Container(
-              padding: const EdgeInsets.all(35),
+              padding:
+                  const EdgeInsets.all(35),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius:
+                    BorderRadius.circular(20),
               ),
               child: const Column(
                 children: [
@@ -497,7 +576,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     'No spaces found',
                     style: TextStyle(
                       fontSize: 17,
-                      fontWeight: FontWeight.w600,
+                      fontWeight:
+                          FontWeight.w600,
                     ),
                   ),
                 ],
@@ -505,75 +585,116 @@ class _RenterHomePageState extends State<RenterHomePage> {
             )
           else
             ...filteredSpaces.map(
-              (space) => buildSpaceCard(space),
+              (space) =>
+                  buildSpaceCard(space),
             ),
         ],
       ),
     );
   }
 
-  Widget buildSpaceCard(Map<String, dynamic> space) {
+  // =========================================================
+  // SPACE CARD
+  // =========================================================
+
+  Widget buildSpaceCard(
+      Map<String, dynamic> space) {
     final id = space['id'].toString();
 
-    final imageUrl = getSpaceImage(space);
-    final fallback = getFallbackImage(space);
+    final imageUrl =
+        getSpaceImage(space);
+
+    final fallback =
+        getFallbackImage(space);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final result = await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => BookingPaymentPage(
+            builder: (_) =>
+                BookingPaymentPage(
               space: space,
             ),
           ),
         );
+
+        // Refresh immediately after booking
+        if (result == true) {
+          await loadData();
+
+          if (mounted) {
+            setState(() {
+              currentIndex = 2;
+            });
+          }
+        }
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 18),
-        decoration: BoxDecoration(
+        margin:
+            const EdgeInsets.only(
+          bottom: 18,
+        ),
+        decoration:
+            BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius:
+              BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black
+                  .withOpacity(0.05),
               blurRadius: 12,
-              offset: const Offset(0, 5),
+              offset:
+                  const Offset(0, 5),
             ),
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(22),
+                  borderRadius:
+                      const BorderRadius
+                          .vertical(
+                    top: Radius.circular(
+                      22,
+                    ),
                   ),
-                  child: imageUrl.isNotEmpty
+                  child: imageUrl
+                          .isNotEmpty
                       ? Image.network(
                           imageUrl,
                           height: 190,
-                          width: double.infinity,
+                          width:
+                              double.infinity,
                           fit: BoxFit.cover,
-                          errorBuilder: (
+                          errorBuilder:
+                              (
                             context,
                             error,
                             stackTrace,
                           ) {
-                            return Image.asset(
+                            return Image
+                                .asset(
                               fallback,
-                              height: 190,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
+                              height:
+                                  190,
+                              width:
+                                  double.infinity,
+                              fit: BoxFit
+                                  .cover,
                             );
                           },
                         )
                       : Image.asset(
                           fallback,
                           height: 190,
-                          width: double.infinity,
+                          width:
+                              double.infinity,
                           fit: BoxFit.cover,
                         ),
                 ),
@@ -581,54 +702,82 @@ class _RenterHomePageState extends State<RenterHomePage> {
                 Positioned(
                   top: 12,
                   right: 12,
-                  child: GestureDetector(
-                    onTap: () => toggleSaved(id),
+                  child:
+                      GestureDetector(
+                    onTap: () =>
+                        toggleSaved(id),
                     child: Container(
                       width: 40,
                       height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.95),
-                        shape: BoxShape.circle,
+                      decoration:
+                          BoxDecoration(
+                        color: Colors.white
+                            .withOpacity(
+                          0.95,
+                        ),
+                        shape:
+                            BoxShape.circle,
                       ),
                       child: Icon(
                         isSaved(id)
                             ? Icons.favorite
-                            : Icons.favorite_border,
+                            : Icons
+                                .favorite_border,
                         color: isSaved(id)
-                            ? Colors.redAccent
-                            : const Color(0xff76563d),
+                            ? Colors
+                                .redAccent
+                            : const Color(
+                                0xff76563d,
+                              ),
                       ),
                     ),
                   ),
                 ),
 
-                if (space['verified'] == true)
+                if (space['verified'] ==
+                    true)
                   Positioned(
                     top: 14,
                     left: 14,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
                         horizontal: 10,
                         vertical: 6,
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(20),
+                      decoration:
+                          BoxDecoration(
+                        color: Colors.white
+                            .withOpacity(
+                          0.95,
+                        ),
+                        borderRadius:
+                            BorderRadius
+                                .circular(
+                          20,
+                        ),
                       ),
                       child: const Row(
                         children: [
                           Icon(
                             Icons.verified,
                             size: 15,
-                            color: Colors.green,
+                            color:
+                                Colors.green,
                           ),
-                          SizedBox(width: 4),
+                          SizedBox(
+                            width: 4,
+                          ),
                           Text(
                             'Verified',
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green,
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
+                              color:
+                                  Colors.green,
                             ),
                           ),
                         ],
@@ -639,34 +788,53 @@ class _RenterHomePageState extends State<RenterHomePage> {
             ),
 
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding:
+                  const EdgeInsets.all(
+                16,
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment
+                        .start,
                 children: [
                   Text(
-                    space['title'] ?? 'Available Space',
-                    style: const TextStyle(
+                    space['title'] ??
+                        'Available Space',
+                    style:
+                        const TextStyle(
                       fontSize: 19,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xff3f3329),
+                      fontWeight:
+                          FontWeight.bold,
+                      color:
+                          Color(0xff3f3329),
                     ),
                   ),
 
-                  const SizedBox(height: 7),
+                  const SizedBox(
+                    height: 7,
+                  ),
 
                   Row(
                     children: [
                       const Icon(
-                        Icons.location_on_outlined,
+                        Icons
+                            .location_on_outlined,
                         size: 17,
-                        color: Color(0xff76563d),
+                        color: Color(
+                          0xff76563d,
+                        ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(
+                        width: 4,
+                      ),
                       Expanded(
                         child: Text(
-                          space['address'] ?? 'Riyadh',
-                          style: const TextStyle(
-                            color: Colors.grey,
+                          space['address'] ??
+                              'Riyadh',
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.grey,
                             fontSize: 13,
                           ),
                         ),
@@ -674,25 +842,43 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(
+                    height: 12,
+                  ),
 
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding:
+                            const EdgeInsets
+                                .symmetric(
                           horizontal: 10,
                           vertical: 6,
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xfff0e9e0),
-                          borderRadius: BorderRadius.circular(10),
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xfff0e9e0,
+                          ),
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            10,
+                          ),
                         ),
                         child: Text(
-                          space['type'] ?? 'Other',
-                          style: const TextStyle(
-                            color: Color(0xff76563d),
+                          space['type'] ??
+                              'Other',
+                          style:
+                              const TextStyle(
+                            color: Color(
+                              0xff76563d,
+                            ),
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight:
+                                FontWeight
+                                    .w600,
                           ),
                         ),
                       ),
@@ -701,9 +887,13 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                       Text(
                         getPrice(space),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xff76563d),
+                        style:
+                            const TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                          color: Color(
+                            0xff76563d,
+                          ),
                           fontSize: 14,
                         ),
                       ),
@@ -717,49 +907,67 @@ class _RenterHomePageState extends State<RenterHomePage> {
       ),
     );
   }
-
   // =========================================================
   // SAVED
   // =========================================================
 
   Widget buildSaved() {
-    final saved = spaces.where((space) {
-      return isSaved(space['id'].toString());
-    }).toList();
+    final saved = spaces.where(
+      (space) {
+        return isSaved(
+          space['id'].toString(),
+        );
+      },
+    ).toList();
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding:
+          const EdgeInsets.all(20),
       children: [
         const Text(
           'Saved Spaces',
           style: TextStyle(
             fontFamily: 'Georgia',
             fontSize: 28,
-            fontWeight: FontWeight.bold,
-            fontStyle: FontStyle.italic,
-            color: Color(0xff5f4633),
+            fontWeight:
+                FontWeight.bold,
+            fontStyle:
+                FontStyle.italic,
+            color:
+                Color(0xff5f4633),
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(
+          height: 20,
+        ),
 
         if (saved.isEmpty)
           const Padding(
-            padding: EdgeInsets.only(top: 100),
+            padding:
+                EdgeInsets.only(
+              top: 100,
+            ),
             child: Center(
               child: Column(
                 children: [
                   Icon(
-                    Icons.favorite_border,
+                    Icons
+                        .favorite_border,
                     size: 55,
-                    color: Colors.grey,
+                    color:
+                        Colors.grey,
                   ),
-                  SizedBox(height: 15),
+                  SizedBox(
+                    height: 15,
+                  ),
                   Text(
                     'No saved spaces yet',
-                    style: TextStyle(
+                    style:
+                        TextStyle(
                       fontSize: 17,
-                      color: Colors.grey,
+                      color:
+                          Colors.grey,
                     ),
                   ),
                 ],
@@ -768,7 +976,10 @@ class _RenterHomePageState extends State<RenterHomePage> {
           )
         else
           ...saved.map(
-            (space) => buildSpaceCard(space),
+            (space) =>
+                buildSpaceCard(
+              space,
+            ),
           ),
       ],
     );
@@ -779,153 +990,233 @@ class _RenterHomePageState extends State<RenterHomePage> {
   // =========================================================
 
   Widget buildBookings() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        20,
-        20,
-        30,
-      ),
-      children: [
-        const Text(
-          'Booking',
-          style: TextStyle(
-            fontFamily: 'Georgia',
-            fontSize: 30,
-            fontWeight: FontWeight.bold,
-            fontStyle: FontStyle.italic,
-            color: Color(0xff5f4633),
-          ),
+    return RefreshIndicator(
+      onRefresh: loadData,
+      child: ListView(
+        padding:
+            const EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          30,
         ),
-
-        const SizedBox(height: 6),
-
-        Text(
-          '${bookings.length} bookings',
-          style: const TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
+        children: [
+          const Text(
+            'Booking',
+            style: TextStyle(
+              fontFamily: 'Georgia',
+              fontSize: 30,
+              fontWeight:
+                  FontWeight.bold,
+              fontStyle:
+                  FontStyle.italic,
+              color:
+                  Color(0xff5f4633),
+            ),
           ),
-        ),
 
-        const SizedBox(height: 22),
+          const SizedBox(
+            height: 6,
+          ),
 
-        if (bookings.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 100),
-            child: Center(
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 50,
-                    color: Colors.grey,
-                  ),
-                  SizedBox(height: 15),
-                  Text(
-                    'No bookings yet',
-                    style: TextStyle(
-                      fontSize: 17,
-                      color: Colors.grey,
+          Text(
+            '${bookings.length} bookings',
+            style:
+                const TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
+          ),
+
+          const SizedBox(
+            height: 22,
+          ),
+
+          if (bookings.isEmpty)
+            const Padding(
+              padding:
+                  EdgeInsets.only(
+                top: 100,
+              ),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons
+                          .calendar_today_outlined,
+                      size: 50,
+                      color:
+                          Colors.grey,
                     ),
-                  ),
-                ],
+                    SizedBox(
+                      height: 15,
+                    ),
+                    Text(
+                      'No bookings yet',
+                      style:
+                          TextStyle(
+                        fontSize: 17,
+                        color:
+                            Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...bookings.map(
+              (booking) =>
+                  buildBookingCard(
+                booking,
               ),
             ),
-          )
-        else
-          ...bookings.map(
-            (booking) => buildBookingCard(booking),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget buildBookingCard(
-      Map<String, dynamic> booking) {
-    final space = booking['spaces'];
+      Map<String, dynamic>
+          booking) {
+    final space =
+        booking['spaces'];
 
     final title = space is Map
-        ? (space['title'] ?? 'Space').toString()
+        ? (space['title'] ??
+                'Space')
+            .toString()
         : 'Space';
 
     final address = space is Map
-        ? (space['address'] ?? 'Riyadh').toString()
+        ? (space['address'] ??
+                'Riyadh')
+            .toString()
         : 'Riyadh';
 
     final type = space is Map
-        ? (space['type'] ?? 'Other').toString()
+        ? (space['type'] ??
+                'Other')
+            .toString()
         : 'Other';
 
     final rentalType =
-        (booking['rental_type'] ?? 'daily').toString();
+        (booking['rental_type'] ??
+                'daily')
+            .toString();
 
     final status =
-        (booking['status'] ?? 'pending').toString().toLowerCase();
+        (booking['status'] ??
+                'pending')
+            .toString()
+            .toLowerCase();
 
     final startDate =
-        booking['start_date']?.toString() ?? '-';
+        booking['start_date']
+                ?.toString() ??
+            '-';
 
     final endDate =
-        booking['end_date']?.toString() ?? '-';
+        booking['end_date']
+                ?.toString() ??
+            '-';
 
     final totalPrice =
-        booking['total_price']?.toString() ?? '0';
+        booking['total_price']
+                ?.toString() ??
+            '0';
 
     final totalDays =
-        booking['total_days']?.toString() ?? '-';
+        booking['total_days']
+                ?.toString() ??
+            '-';
 
     final pricePerDay =
-        booking['price_per_day']?.toString() ?? '0';
+        booking['price_per_day']
+                ?.toString() ??
+            '0';
 
     final pricePerMonth =
-        booking['price_per_month']?.toString() ?? '0';
+        booking['price_per_month']
+                ?.toString() ??
+            '0';
 
     final serviceFee =
-        booking['service_fee']?.toString() ?? '0';
+        booking['service_fee']
+                ?.toString() ??
+            '0';
 
     Color statusColor;
 
-    if (status == 'confirmed') {
-      statusColor = Colors.green;
-    } else if (status == 'completed') {
-      statusColor = const Color(0xff6f8f72);
-    } else if (status == 'cancelled') {
-      statusColor = Colors.redAccent;
+    if (status ==
+        'confirmed') {
+      statusColor =
+          Colors.green;
+    } else if (status ==
+        'completed') {
+      statusColor =
+          const Color(
+        0xff6f8f72,
+      );
+    } else if (status ==
+        'cancelled') {
+      statusColor =
+          Colors.redAccent;
     } else {
-      statusColor = Colors.orange;
+      statusColor =
+          Colors.orange;
     }
 
     final bool isMonthly =
-        rentalType.toLowerCase() == 'monthly';
+        rentalType.toLowerCase() ==
+            'monthly';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      decoration: BoxDecoration(
+      margin:
+          const EdgeInsets.only(
+        bottom: 18,
+      ),
+      decoration:
+          BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius:
+            BorderRadius.circular(
+          24,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black
+                .withOpacity(0.04),
             blurRadius: 12,
-            offset: const Offset(0, 4),
+            offset:
+                const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(
+            width:
+                double.infinity,
+            padding:
+                const EdgeInsets
+                    .fromLTRB(
               18,
               17,
               18,
               17,
             ),
-            decoration: const BoxDecoration(
-              color: Color(0xff76563d),
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(24),
+            decoration:
+                const BoxDecoration(
+              color:
+                  Color(0xff76563d),
+              borderRadius:
+                  BorderRadius
+                      .vertical(
+                top:
+                    Radius.circular(
+                  24,
+                ),
               ),
             ),
             child: Row(
@@ -933,54 +1224,91 @@ class _RenterHomePageState extends State<RenterHomePage> {
                 Container(
                   width: 48,
                   height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(15),
+                  decoration:
+                      BoxDecoration(
+                    color: Colors
+                        .white
+                        .withOpacity(
+                      0.16,
+                    ),
+                    borderRadius:
+                        BorderRadius
+                            .circular(
+                      15,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.home_work_outlined,
-                    color: Colors.white,
+                  child:
+                      const Icon(
+                    Icons
+                        .home_work_outlined,
+                    color:
+                        Colors.white,
                     size: 27,
                   ),
                 ),
 
-                const SizedBox(width: 13),
+                const SizedBox(
+                  width: 13,
+                ),
 
                 Expanded(
-                  child: Column(
+                  child:
+                      Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
                     children: [
                       Text(
                         title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                        maxLines:
+                            1,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.white,
+                          fontSize:
+                              18,
+                          fontWeight:
+                              FontWeight
+                                  .bold,
                         ),
                       ),
 
-                      const SizedBox(height: 5),
+                      const SizedBox(
+                        height: 5,
+                      ),
 
                       Row(
                         children: [
                           const Icon(
-                            Icons.location_on_outlined,
-                            size: 15,
-                            color: Colors.white70,
+                            Icons
+                                .location_on_outlined,
+                            size:
+                                15,
+                            color:
+                                Colors.white70,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(
+                            width: 4,
+                          ),
                           Expanded(
-                            child: Text(
+                            child:
+                                Text(
                               address,
-                              maxLines: 1,
+                              maxLines:
+                                  1,
                               overflow:
-                                  TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
+                                  TextOverflow
+                                      .ellipsis,
+                              style:
+                                  const TextStyle(
+                                color:
+                                    Colors.white70,
+                                fontSize:
+                                    13,
                               ),
                             ),
                           ),
@@ -994,71 +1322,122 @@ class _RenterHomePageState extends State<RenterHomePage> {
           ),
 
           Padding(
-            padding: const EdgeInsets.all(17),
+            padding:
+                const EdgeInsets
+                    .all(17),
             child: Column(
               crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  CrossAxisAlignment
+                      .start,
               children: [
                 Row(
                   children: [
                     Container(
                       padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 10,
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal:
+                            10,
                         vertical: 7,
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xfff3eee8),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xfff3eee8,
+                        ),
                         borderRadius:
-                            BorderRadius.circular(12),
+                            BorderRadius
+                                .circular(
+                          12,
+                        ),
                       ),
-                      child: Row(
+                      child:
+                          Row(
                         children: [
                           const Icon(
-                            Icons.category_outlined,
+                            Icons
+                                .category_outlined,
                             size: 15,
-                            color: Color(0xff76563d),
+                            color:
+                                Color(
+                              0xff76563d,
+                            ),
                           ),
-                          const SizedBox(width: 5),
+                          const SizedBox(
+                            width: 5,
+                          ),
                           Text(
                             type,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xff76563d),
-                              fontWeight: FontWeight.w600,
+                            style:
+                                const TextStyle(
+                              fontSize:
+                                  12,
+                              color:
+                                  Color(
+                                0xff76563d,
+                              ),
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
                             ),
                           ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 8,
+                    ),
 
                     Container(
                       padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 10,
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal:
+                            10,
                         vertical: 7,
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xfff3eee8),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xfff3eee8,
+                        ),
                         borderRadius:
-                            BorderRadius.circular(12),
+                            BorderRadius
+                                .circular(
+                          12,
+                        ),
                       ),
-                      child: Row(
+                      child:
+                          Row(
                         children: [
                           const Icon(
-                            Icons.calendar_month_outlined,
+                            Icons
+                                .calendar_month_outlined,
                             size: 15,
-                            color: Color(0xff76563d),
+                            color:
+                                Color(
+                              0xff76563d,
+                            ),
                           ),
-                          const SizedBox(width: 5),
+                          const SizedBox(
+                            width: 5,
+                          ),
                           Text(
                             rentalType,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xff76563d),
-                              fontWeight: FontWeight.w600,
+                            style:
+                                const TextStyle(
+                              fontSize:
+                                  12,
+                              color:
+                                  Color(
+                                0xff76563d,
+                              ),
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
                             ),
                           ),
                         ],
@@ -1068,70 +1447,119 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     const Spacer(),
 
                     Icon(
-                      Icons.check_circle,
+                      Icons
+                          .check_circle,
                       size: 17,
-                      color: statusColor,
+                      color:
+                          statusColor,
                     ),
 
-                    const SizedBox(width: 5),
+                    const SizedBox(
+                      width: 5,
+                    ),
 
                     Text(
-                      status[0].toUpperCase() +
-                          status.substring(1),
-                      style: TextStyle(
+                      status[0]
+                              .toUpperCase() +
+                          status.substring(
+                            1,
+                          ),
+                      style:
+                          TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: statusColor,
+                        fontWeight:
+                            FontWeight
+                                .w600,
+                        color:
+                            statusColor,
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(
+                  height: 20,
+                ),
 
                 const Text(
                   'Rental period',
-                  style: TextStyle(
+                  style:
+                      TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xff5f4633),
+                    fontWeight:
+                        FontWeight.bold,
+                    color:
+                        Color(
+                      0xff5f4633,
+                    ),
                   ),
                 ),
 
-                const SizedBox(height: 10),
+                const SizedBox(
+                  height: 10,
+                ),
 
                 Row(
                   children: [
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: const Color(0xfffaf8f5),
+                      child:
+                          Container(
+                        padding:
+                            const EdgeInsets
+                                .all(
+                          13,
+                        ),
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xfffaf8f5,
+                          ),
                           borderRadius:
-                              BorderRadius.circular(15),
-                          border: Border.all(
-                            color: const Color(0xffeee7df),
+                              BorderRadius
+                                  .circular(
+                            15,
+                          ),
+                          border:
+                              Border.all(
+                            color:
+                                const Color(
+                              0xffeee7df,
+                            ),
                           ),
                         ),
-                        child: Column(
+                        child:
+                            Column(
                           crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              CrossAxisAlignment
+                                  .start,
                           children: [
                             const Text(
                               'Start',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
+                              style:
+                                  TextStyle(
+                                fontSize:
+                                    12,
+                                color:
+                                    Colors.grey,
                               ),
                             ),
-                            const SizedBox(height: 5),
+                            const SizedBox(
+                              height: 5,
+                            ),
                             Text(
                               startDate,
-                              style: const TextStyle(
-                                fontSize: 13,
+                              style:
+                                  const TextStyle(
+                                fontSize:
+                                    13,
                                 fontWeight:
-                                    FontWeight.w600,
-                                color: Color(0xff3f3329),
+                                    FontWeight
+                                        .w600,
+                                color:
+                                    Color(
+                                  0xff3f3329,
+                                ),
                               ),
                             ),
                           ],
@@ -1141,44 +1569,81 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                     const Padding(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 9),
-                      child: Icon(
-                        Icons.arrow_forward,
+                          EdgeInsets
+                              .symmetric(
+                        horizontal: 9,
+                      ),
+                      child:
+                          Icon(
+                        Icons
+                            .arrow_forward,
                         size: 19,
-                        color: Color(0xff76563d),
+                        color:
+                            Color(
+                          0xff76563d,
+                        ),
                       ),
                     ),
 
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: const Color(0xfffaf8f5),
+                      child:
+                          Container(
+                        padding:
+                            const EdgeInsets
+                                .all(
+                          13,
+                        ),
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xfffaf8f5,
+                          ),
                           borderRadius:
-                              BorderRadius.circular(15),
-                          border: Border.all(
-                            color: const Color(0xffeee7df),
+                              BorderRadius
+                                  .circular(
+                            15,
+                          ),
+                          border:
+                              Border.all(
+                            color:
+                                const Color(
+                              0xffeee7df,
+                            ),
                           ),
                         ),
-                        child: Column(
+                        child:
+                            Column(
                           crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              CrossAxisAlignment
+                                  .start,
                           children: [
                             const Text(
                               'End',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
+                              style:
+                                  TextStyle(
+                                fontSize:
+                                    12,
+                                color:
+                                    Colors.grey,
                               ),
                             ),
-                            const SizedBox(height: 5),
+                            const SizedBox(
+                              height: 5,
+                            ),
                             Text(
                               endDate,
-                              style: const TextStyle(
-                                fontSize: 13,
+                              style:
+                                  const TextStyle(
+                                fontSize:
+                                    13,
                                 fontWeight:
-                                    FontWeight.w600,
-                                color: Color(0xff3f3329),
+                                    FontWeight
+                                        .w600,
+                                color:
+                                    Color(
+                                  0xff3f3329,
+                                ),
                               ),
                             ),
                           ],
@@ -1188,29 +1653,41 @@ class _RenterHomePageState extends State<RenterHomePage> {
                   ],
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(
+                  height: 14,
+                ),
 
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: const Color(0xfffaf8f5),
-                    borderRadius: BorderRadius.circular(17),
+                  width:
+                      double.infinity,
+                  padding:
+                      const EdgeInsets
+                          .all(15),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        const Color(
+                      0xfffaf8f5,
+                    ),
+                    borderRadius:
+                        BorderRadius
+                            .circular(
+                      17,
+                    ),
                   ),
-                  child: Column(
+                  child:
+                      Column(
                     children: [
                       bookingInfoRow(
                         'Duration',
                         '$totalDays days',
                       ),
-
                       bookingInfoRow(
                         isMonthly
                             ? 'Monthly price'
                             : 'Daily price',
                         '${isMonthly ? pricePerMonth : pricePerDay} SAR',
                       ),
-
                       bookingInfoRow(
                         'Service fee',
                         '$serviceFee SAR',
@@ -1218,30 +1695,52 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
                       const Padding(
                         padding:
-                            EdgeInsets.symmetric(vertical: 8),
-                        child: Divider(
-                          color: Color(0xffddd4ca),
+                            EdgeInsets
+                                .symmetric(
+                          vertical: 8,
+                        ),
+                        child:
+                            Divider(
+                          color:
+                              Color(
+                            0xffddd4ca,
+                          ),
                         ),
                       ),
 
                       Row(
                         mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
+                            MainAxisAlignment
+                                .spaceBetween,
                         children: [
                           const Text(
                             'Total',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xff3f3329),
+                            style:
+                                TextStyle(
+                              fontSize:
+                                  17,
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
+                              color:
+                                  Color(
+                                0xff3f3329,
+                              ),
                             ),
                           ),
                           Text(
                             '$totalPrice SAR',
-                            style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xff76563d),
+                            style:
+                                const TextStyle(
+                              fontSize:
+                                  19,
+                              fontWeight:
+                                  FontWeight
+                                      .bold,
+                              color:
+                                  Color(
+                                0xff76563d,
+                              ),
                             ),
                           ),
                         ],
@@ -1250,36 +1749,63 @@ class _RenterHomePageState extends State<RenterHomePage> {
                   ),
                 ),
 
-                const SizedBox(height: 13),
+                const SizedBox(
+                  height: 13,
+                ),
 
-                if (status == 'confirmed')
+                if (status ==
+                    'confirmed')
                   Container(
-                    width: double.infinity,
+                    width:
+                        double.infinity,
                     padding:
-                        const EdgeInsets.symmetric(
+                        const EdgeInsets
+                            .symmetric(
                       horizontal: 13,
                       vertical: 11,
                     ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xffedf5eb),
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          const Color(
+                        0xffedf5eb,
+                      ),
                       borderRadius:
-                          BorderRadius.circular(13),
+                          BorderRadius
+                              .circular(
+                        13,
+                      ),
                     ),
-                    child: const Row(
+                    child:
+                        const Row(
                       children: [
                         Icon(
-                          Icons.check_circle,
+                          Icons
+                              .check_circle,
                           size: 18,
-                          color: Color(0xff5f8b62),
+                          color:
+                              Color(
+                            0xff5f8b62,
+                          ),
                         ),
-                        SizedBox(width: 8),
+                        SizedBox(
+                          width: 8,
+                        ),
                         Expanded(
-                          child: Text(
+                          child:
+                              Text(
                             'Your booking is confirmed and saved successfully.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xff527457),
-                              fontWeight: FontWeight.w500,
+                            style:
+                                TextStyle(
+                              fontSize:
+                                  12,
+                              color:
+                                  Color(
+                                0xff527457,
+                              ),
+                              fontWeight:
+                                  FontWeight
+                                      .w500,
                             ),
                           ),
                         ),
@@ -1299,24 +1825,32 @@ class _RenterHomePageState extends State<RenterHomePage> {
     String value,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
       child: Row(
         mainAxisAlignment:
-            MainAxisAlignment.spaceBetween,
+            MainAxisAlignment
+                .spaceBetween,
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style:
+                const TextStyle(
               fontSize: 13,
               color: Colors.grey,
             ),
           ),
           Text(
             value,
-            style: const TextStyle(
+            style:
+                const TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xff3f3329),
+              fontWeight:
+                  FontWeight.w600,
+              color:
+                  Color(0xff3f3329),
             ),
           ),
         ],
@@ -1330,81 +1864,240 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
   Widget buildAccount() {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding:
+          const EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        30,
+      ),
       children: [
-        const Text(
-          'My Account',
-          style: TextStyle(
-            fontFamily: 'Georgia',
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            fontStyle: FontStyle.italic,
-            color: Color(0xff5f4633),
-          ),
+        Row(
+          mainAxisAlignment:
+              MainAxisAlignment
+                  .spaceBetween,
+          children: [
+            const Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                Text(
+                  'My Profile',
+                  style:
+                      TextStyle(
+                    fontFamily:
+                        'Georgia',
+                    fontSize: 30,
+                    fontWeight:
+                        FontWeight
+                            .bold,
+                    fontStyle:
+                        FontStyle
+                            .italic,
+                    color:
+                        Color(
+                      0xff5f4633,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 5,
+                ),
+                Text(
+                  'Your SpaceOra renter account',
+                  style:
+                      TextStyle(
+                    fontSize: 14,
+                    color:
+                        Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+
+            Container(
+              width: 52,
+              height: 52,
+              decoration:
+                  const BoxDecoration(
+                color:
+                    Color(0xffeee7df),
+                shape:
+                    BoxShape.circle,
+              ),
+              child:
+                  const Icon(
+                Icons
+                    .person_outline,
+                color:
+                    Color(0xff76563d),
+                size: 27,
+              ),
+            ),
+          ],
         ),
 
-        const SizedBox(height: 22),
+        const SizedBox(
+          height: 24,
+        ),
 
+        // PROFILE CARD
         Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xff76563d),
-            borderRadius: BorderRadius.circular(24),
+          padding:
+              const EdgeInsets.all(
+            20,
+          ),
+          decoration:
+              BoxDecoration(
+            color:
+                const Color(
+              0xff76563d,
+            ),
+            borderRadius:
+                BorderRadius
+                    .circular(
+              24,
+            ),
           ),
           child: Row(
             children: [
-              const CircleAvatar(
-                radius: 34,
-                backgroundColor: Colors.white,
-                child: Icon(
-                  Icons.person,
-                  size: 38,
-                  color: Color(0xff76563d),
+              CircleAvatar(
+                radius: 35,
+                backgroundColor:
+                    const Color(
+                  0xfff4f1eb,
+                ),
+                child: Text(
+                  userName.isNotEmpty
+                      ? userName[0]
+                          .toUpperCase()
+                      : 'U',
+                  style:
+                      const TextStyle(
+                    fontSize: 27,
+                    fontWeight:
+                        FontWeight
+                            .w500,
+                    color:
+                        Color(
+                      0xff3f3329,
+                    ),
+                  ),
                 ),
               ),
 
-              const SizedBox(width: 16),
+              const SizedBox(
+                width: 16,
+              ),
 
               Expanded(
-                child: Column(
+                child:
+                    Column(
                   crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                      CrossAxisAlignment
+                          .start,
                   children: [
                     Text(
                       userName,
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white,
                         fontSize: 19,
+                        fontWeight:
+                            FontWeight
+                                .bold,
                       ),
                     ),
 
-                    const SizedBox(height: 5),
+                    const SizedBox(
+                      height: 5,
+                    ),
 
                     Text(
                       userEmail,
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white70,
+                        fontSize: 13,
                       ),
                     ),
+
+                    if (userPhone
+                        .isNotEmpty) ...[
+                      const SizedBox(
+                        height: 4,
+                      ),
+                      Text(
+                        userPhone,
+                        style:
+                            const TextStyle(
+                          color:
+                              Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
+              ),
+
+              const Icon(
+                Icons
+                    .verified_user_outlined,
+                color:
+                    Colors.white,
+                size: 30,
               ),
             ],
           ),
         ),
 
-        const SizedBox(height: 22),
+        const SizedBox(
+          height: 24,
+        ),
 
+        const Text(
+          'Account',
+          style:
+              TextStyle(
+            fontSize: 21,
+            fontWeight:
+                FontWeight.bold,
+            color:
+                Color(0xff3f3329),
+          ),
+        ),
+
+        const SizedBox(
+          height: 12,
+        ),
+
+        // PERSONAL INFORMATION
+        accountTile(
+          Icons.person_outline,
+          'Personal Information',
+          'View your personal information',
+          () {
+            showPersonalInformation();
+          },
+        ),
+
+        // BOOKINGS
         accountTile(
           Icons.calendar_month_outlined,
           'My Bookings',
-          '${bookings.length} bookings',
+          'View and manage your bookings',
           () {
             setState(() {
               currentIndex = 2;
@@ -1412,10 +2105,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
           },
         ),
 
+        // SAVED
         accountTile(
           Icons.favorite_border,
           'Saved Spaces',
-          '${savedSpaces.length} saved',
+          'View your saved spaces',
           () {
             setState(() {
               currentIndex = 1;
@@ -1423,21 +2117,19 @@ class _RenterHomePageState extends State<RenterHomePage> {
           },
         ),
 
-        accountTile(
-          Icons.person_outline,
-          'Profile Information',
-          'Personal information',
-          () {},
-        ),
-
+        // SETTINGS
         accountTile(
           Icons.settings_outlined,
           'Settings',
           'App preferences',
-          () {},
+          () {
+            showSettings();
+          },
         ),
 
-        const SizedBox(height: 8),
+        const SizedBox(
+          height: 8,
+        ),
 
         // LOG OUT
         accountTile(
@@ -1445,21 +2137,30 @@ class _RenterHomePageState extends State<RenterHomePage> {
           'Log Out',
           'Sign out of your account',
           () async {
-            await supabase.auth.signOut();
+            try {
+              await supabase.auth.signOut();
 
-            if (!mounted) return;
+              if (!mounted) return;
 
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (context) => const LoginPage(),
-              ),
-              (route) => false,
-            );
+              Navigator.of(context)
+                  .pushNamedAndRemoveUntil(
+                '/login',
+                (route) => false,
+              );
+            } catch (e) {
+              debugPrint(
+                'Logout error: $e',
+              );
+            }
           },
         ),
       ],
     );
   }
+
+  // =========================================================
+  // ACCOUNT TILE
+  // =========================================================
 
   Widget accountTile(
     IconData icon,
@@ -1468,49 +2169,312 @@ class _RenterHomePageState extends State<RenterHomePage> {
     VoidCallback onTap,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 11),
-      decoration: BoxDecoration(
+      margin:
+          const EdgeInsets.only(
+        bottom: 11,
+      ),
+      decoration:
+          BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
       ),
       child: ListTile(
         onTap: onTap,
         contentPadding:
-            const EdgeInsets.symmetric(
+            const EdgeInsets
+                .symmetric(
           horizontal: 14,
           vertical: 2,
         ),
         leading: Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xfff0e9e0),
-            borderRadius: BorderRadius.circular(13),
+          decoration:
+              BoxDecoration(
+            color:
+                const Color(
+              0xfff0e9e0,
+            ),
+            borderRadius:
+                BorderRadius.circular(
+              13,
+            ),
           ),
           child: Icon(
             icon,
-            color: const Color(0xff76563d),
+            color:
+                const Color(
+              0xff76563d,
+            ),
           ),
         ),
         title: Text(
           title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Color(0xff3f3329),
+          style:
+              const TextStyle(
+            fontWeight:
+                FontWeight.w600,
+            color:
+                Color(0xff3f3329),
           ),
         ),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(
+          style:
+              const TextStyle(
             fontSize: 12,
-            color: Color.fromARGB(255, 167, 127, 113),
+            color:
+                Color(0xffa77f71),
           ),
         ),
-        trailing: const Icon(
+        trailing:
+            const Icon(
           Icons.chevron_right,
-          color: Color.fromARGB(255, 167, 127, 113),
+          color:
+              Color(0xffa77f71),
         ),
       ),
+    );
+  }
+
+  // =========================================================
+  // PERSONAL INFORMATION
+  // =========================================================
+
+  void showPersonalInformation() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor:
+          Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          padding:
+              const EdgeInsets
+                  .fromLTRB(
+            24,
+            22,
+            24,
+            30,
+          ),
+          decoration:
+              const BoxDecoration(
+            color: Colors.white,
+            borderRadius:
+                BorderRadius.vertical(
+              top: Radius.circular(
+                30,
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              const Text(
+                'Personal Information',
+                style:
+                    TextStyle(
+                  fontSize: 23,
+                  fontWeight:
+                      FontWeight.w600,
+                  color:
+                      Color(
+                    0xff3f3329,
+                  ),
+                ),
+              ),
+
+              const SizedBox(
+                height: 25,
+              ),
+
+              personalInfoRow(
+                Icons.person_outline,
+                'Full Name',
+                userName,
+              ),
+
+              personalInfoRow(
+                Icons.email_outlined,
+                'Email',
+                userEmail,
+              ),
+
+              personalInfoRow(
+                Icons.phone_outlined,
+                'Phone',
+                userPhone.isEmpty
+                    ? 'Not provided'
+                    : userPhone,
+              ),
+
+              const SizedBox(
+                height: 10,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // =========================================================
+  // PERSONAL INFO ROW
+  // =========================================================
+
+  Widget personalInfoRow(
+    IconData icon,
+    String title,
+    String value,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.only(
+        bottom: 18,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color:
+                const Color(
+              0xff76563d,
+            ),
+            size: 22,
+          ),
+
+          const SizedBox(
+            width: 14,
+          ),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                Text(
+                  title,
+                  style:
+                      const TextStyle(
+                    fontSize: 12,
+                    color:
+                        Colors.grey,
+                  ),
+                ),
+
+                const SizedBox(
+                  height: 3,
+                ),
+
+                Text(
+                  value,
+                  style:
+                      const TextStyle(
+                    fontSize: 15,
+                    fontWeight:
+                        FontWeight
+                            .w600,
+                    color:
+                        Color(
+                      0xff3f3329,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // SETTINGS
+  // =========================================================
+
+  void showSettings() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor:
+          Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding:
+              const EdgeInsets
+                  .fromLTRB(
+            24,
+            24,
+            24,
+            30,
+          ),
+          decoration:
+              const BoxDecoration(
+            color: Colors.white,
+            borderRadius:
+                BorderRadius.vertical(
+              top: Radius.circular(
+                30,
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              const Text(
+                'Settings',
+                style:
+                    TextStyle(
+                  fontSize: 23,
+                  fontWeight:
+                      FontWeight.w600,
+                  color:
+                      Color(
+                    0xff3f3329,
+                  ),
+                ),
+              ),
+
+              const SizedBox(
+                height: 22,
+              ),
+
+              accountTile(
+                Icons
+                    .notifications_none,
+                'Notifications',
+                'Manage notifications',
+                () {},
+              ),
+
+              accountTile(
+                Icons.language,
+                'Language',
+                'English',
+                () {},
+              ),
+
+              accountTile(
+                Icons.help_outline,
+                'Help & Support',
+                'Get help with SpaceOra',
+                () {},
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

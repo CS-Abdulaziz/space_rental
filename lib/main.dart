@@ -40,6 +40,7 @@ class SpaceOraApp extends StatelessWidget {
         '/login': (context) => LoginPage(),
 
         '/owner': (context) => const OwnerHomePage(),
+        '/signup':(context) => SignupPage(),
       },
     );
   }
