@@ -1,24 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/profile_model.dart';
+import '../../models/verification_model.dart';
+
 class VerificationPage extends StatefulWidget {
   const VerificationPage({super.key});
 
   @override
-  State<VerificationPage> createState() => _VerificationPageState();
+  State<VerificationPage> createState() =>
+      _VerificationPageState();
 }
 
-class _VerificationPageState extends State<VerificationPage> {
+class _VerificationPageState
+    extends State<VerificationPage> {
   final supabase = Supabase.instance.client;
 
-  final fullNameController = TextEditingController();
-  final phoneController = TextEditingController();
-  final emailController = TextEditingController();
-  final idController = TextEditingController();
-  final ownershipReferenceController = TextEditingController();
+  final fullNameController =
+      TextEditingController();
+  final phoneController =
+      TextEditingController();
+  final emailController =
+      TextEditingController();
+  final idController =
+      TextEditingController();
+  final ownershipReferenceController =
+      TextEditingController();
+
+  ProfileModel? profile;
+  VerificationModel? verification;
 
   String ownershipType = 'Property Owner';
   String status = 'Not Submitted';
+
   bool loading = true;
   bool submitting = false;
 
@@ -32,41 +46,79 @@ class _VerificationPageState extends State<VerificationPage> {
     final user = supabase.auth.currentUser;
 
     if (user == null) {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
       return;
     }
 
     try {
-      final profile = await supabase
+      // PROFILE
+      final profileResult = await supabase
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
-      if (profile != null) {
-        fullNameController.text = profile['full_name'] ?? '';
-        phoneController.text = profile['phone'] ?? '';
-        emailController.text = profile['email'] ?? user.email ?? '';
+      if (profileResult != null) {
+        profile = ProfileModel.fromJson(
+          Map<String, dynamic>.from(profileResult),
+        );
+
+        fullNameController.text =
+            profile?.fullName ?? '';
+
+        phoneController.text =
+            profile?.phone ?? '';
+
+        emailController.text =
+            profile?.email.isNotEmpty == true
+                ? profile!.email
+                : user.email ?? '';
+      } else {
+        emailController.text =
+            user.email ?? '';
       }
 
-      final verification = await supabase
+      // VERIFICATION
+      final verificationResult = await supabase
           .from('verification')
           .select()
           .eq('owner_id', user.id)
-          .order('submitted_at', ascending: false)
+          .order(
+            'submitted_at',
+            ascending: false,
+          )
           .limit(1);
 
-      if (verification.isNotEmpty) {
-        final data = verification.first;
+      if (verificationResult.isNotEmpty) {
+        verification =
+            VerificationModel.fromJson(
+          Map<String, dynamic>.from(
+            verificationResult.first,
+          ),
+        );
 
-        idController.text = data['demo_id_number'] ?? '';
-        ownershipType = data['ownership_type'] ?? 'Property Owner';
+        idController.text =
+            verification?.demoIdNumber ?? '';
+
+        ownershipType =
+            verification?.ownershipType ??
+                'Property Owner';
+
         ownershipReferenceController.text =
-            data['ownership_reference'] ?? '';
-        status = data['status'] ?? 'Pending';
+            verification?.ownershipReference ??
+                '';
+
+        status =
+            verification?.status.isNotEmpty == true
+                ? verification!.status
+                : 'Pending';
       }
     } catch (e) {
-      debugPrint(e.toString());
+      debugPrint(
+        'VERIFICATION ERROR: $e',
+      );
     }
 
     if (mounted) {
@@ -79,78 +131,140 @@ class _VerificationPageState extends State<VerificationPage> {
 
     if (user == null) return;
 
-    if (fullNameController.text.trim().isEmpty ||
-        phoneController.text.trim().isEmpty ||
-        emailController.text.trim().isEmpty ||
-        idController.text.trim().isEmpty ||
-        ownershipReferenceController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (fullNameController.text
+            .trim()
+            .isEmpty ||
+        phoneController.text
+            .trim()
+            .isEmpty ||
+        emailController.text
+            .trim()
+            .isEmpty ||
+        idController.text
+            .trim()
+            .isEmpty ||
+        ownershipReferenceController.text
+            .trim()
+            .isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content: Text('Please complete all fields'),
+          content: Text(
+            'Please complete all fields',
+          ),
         ),
       );
       return;
     }
 
-    setState(() => submitting = true);
+    setState(() {
+      submitting = true;
+    });
 
     try {
+      // UPDATE PROFILE
       await supabase.from('profiles').update({
-        'full_name': fullNameController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'email': emailController.text.trim(),
+        'full_name':
+            fullNameController.text.trim(),
+        'phone':
+            phoneController.text.trim(),
+        'email':
+            emailController.text.trim(),
       }).eq('id', user.id);
 
+      // CHECK EXISTING VERIFICATION
       final existing = await supabase
           .from('verification')
-          .select('id')
+          .select()
           .eq('owner_id', user.id)
-          .order('submitted_at', ascending: false)
+          .order(
+            'submitted_at',
+            ascending: false,
+          )
           .limit(1);
 
-      final data = {
+      // CREATE VERIFICATION DATA
+      final verificationData = {
         'owner_id': user.id,
-        'full_name': fullNameController.text.trim(),
-        'demo_id_number': idController.text.trim(),
-        'ownership_type': ownershipType,
+        'full_name':
+            fullNameController.text.trim(),
+        'demo_id_number':
+            idController.text.trim(),
+        'ownership_type':
+            ownershipType,
         'ownership_reference':
-            ownershipReferenceController.text.trim(),
+            ownershipReferenceController
+                .text
+                .trim(),
         'status': 'Pending',
-        'submitted_at': DateTime.now().toIso8601String(),
+        'submitted_at':
+            DateTime.now()
+                .toIso8601String(),
       };
 
+      // UPDATE OR INSERT
       if (existing.isNotEmpty) {
+        final verificationId =
+            existing.first['id'];
+
         await supabase
             .from('verification')
-            .update(data)
-            .eq('id', existing.first['id']);
+            .update(verificationData)
+            .eq(
+              'id',
+              verificationId,
+            );
       } else {
-        await supabase.from('verification').insert(data);
+        final inserted =
+            await supabase
+                .from('verification')
+                .insert(
+                  verificationData,
+                )
+                .select()
+                .single();
+
+        verification =
+            VerificationModel.fromJson(
+          Map<String, dynamic>.from(
+            inserted,
+          ),
+        );
       }
 
-      setState(() {
-        status = 'Pending';
-      });
+      status = 'Pending';
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        setState(() {});
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           const SnackBar(
-            content: Text('Verification submitted successfully'),
+            content: Text(
+              'Verification submitted successfully',
+            ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(
+              'Error: $e',
+            ),
           ),
         );
       }
     }
 
     if (mounted) {
-      setState(() => submitting = false);
+      setState(() {
+        submitting = false;
+      });
     }
   }
 
@@ -161,19 +275,24 @@ class _VerificationPageState extends State<VerificationPage> {
     emailController.dispose();
     idController.dispose();
     ownershipReferenceController.dispose();
+
     super.dispose();
   }
 
-  InputDecoration fieldDecoration(String hint) {
+  InputDecoration fieldDecoration(
+    String hint,
+  ) {
     return InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: const Color(0xffF4EFE8),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius:
+            BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
-      contentPadding: const EdgeInsets.symmetric(
+      contentPadding:
+          const EdgeInsets.symmetric(
         horizontal: 16,
         vertical: 15,
       ),
@@ -186,9 +305,11 @@ class _VerificationPageState extends State<VerificationPage> {
     String hint,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+      padding:
+          const EdgeInsets.only(bottom: 18),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Text(
             label,
@@ -200,7 +321,8 @@ class _VerificationPageState extends State<VerificationPage> {
           const SizedBox(height: 8),
           TextField(
             controller: controller,
-            decoration: fieldDecoration(hint),
+            decoration:
+                fieldDecoration(hint),
           ),
         ],
       ),
@@ -211,9 +333,11 @@ class _VerificationPageState extends State<VerificationPage> {
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(
-        backgroundColor: Color(0xffFBF8F3),
+        backgroundColor:
+            Color(0xffFBF8F3),
         body: Center(
-          child: CircularProgressIndicator(
+          child:
+              CircularProgressIndicator(
             color: Color(0xff765640),
           ),
         ),
@@ -221,11 +345,14 @@ class _VerificationPageState extends State<VerificationPage> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xffFBF8F3),
+      backgroundColor:
+          const Color(0xffFBF8F3),
       appBar: AppBar(
-        backgroundColor: const Color(0xffFBF8F3),
+        backgroundColor:
+            const Color(0xffFBF8F3),
         elevation: 0,
-        iconTheme: const IconThemeData(
+        iconTheme:
+            const IconThemeData(
           color: Color(0xff4B382A),
         ),
         title: const Text(
@@ -237,15 +364,23 @@ class _VerificationPageState extends State<VerificationPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(22, 10, 22, 30),
+        padding:
+            const EdgeInsets.fromLTRB(
+          22,
+          10,
+          22,
+          30,
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             const Text(
               'Verify your space',
               style: TextStyle(
                 fontSize: 28,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
                 color: Color(0xff4B382A),
               ),
             ),
@@ -264,25 +399,34 @@ class _VerificationPageState extends State<VerificationPage> {
 
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xffEEE5DB),
-                borderRadius: BorderRadius.circular(18),
+              padding:
+                  const EdgeInsets.all(16),
+              decoration:
+                  BoxDecoration(
+                color:
+                    const Color(0xffEEE5DB),
+                borderRadius:
+                    BorderRadius.circular(18),
               ),
               child: Row(
                 children: [
                   const Icon(
-                    Icons.verified_user_outlined,
-                    color: Color(0xff765640),
+                    Icons
+                        .verified_user_outlined,
+                    color:
+                        Color(0xff765640),
                     size: 28,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Verification status: $status',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xff4B382A),
+                      style:
+                          const TextStyle(
+                        fontWeight:
+                            FontWeight.bold,
+                        color:
+                            Color(0xff4B382A),
                       ),
                     ),
                   ),
@@ -319,41 +463,61 @@ class _VerificationPageState extends State<VerificationPage> {
             const Text(
               'Ownership Type',
               style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Color(0xff4B382A),
+                fontWeight:
+                    FontWeight.w600,
+                color:
+                    Color(0xff4B382A),
               ),
             ),
 
             const SizedBox(height: 8),
 
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xffF4EFE8),
-                borderRadius: BorderRadius.circular(14),
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 14,
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
+              decoration:
+                  BoxDecoration(
+                color:
+                    const Color(0xffF4EFE8),
+                borderRadius:
+                    BorderRadius.circular(14),
+              ),
+              child:
+                  DropdownButtonHideUnderline(
+                child:
+                    DropdownButton<String>(
                   value: ownershipType,
                   isExpanded: true,
                   items: const [
                     DropdownMenuItem(
-                      value: 'Property Owner',
-                      child: Text('Property Owner'),
+                      value:
+                          'Property Owner',
+                      child: Text(
+                        'Property Owner',
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'Tenant',
-                      child: Text('Tenant'),
+                      child: Text(
+                        'Tenant',
+                      ),
                     ),
                     DropdownMenuItem(
-                      value: 'Authorized Representative',
-                      child: Text('Authorized Representative'),
+                      value:
+                          'Authorized Representative',
+                      child: Text(
+                        'Authorized Representative',
+                      ),
                     ),
                   ],
-                  onChanged: (value) {
+                  onChanged:
+                      (value) {
                     if (value != null) {
                       setState(() {
-                        ownershipType = value;
+                        ownershipType =
+                            value;
                       });
                     }
                   },
@@ -385,12 +549,23 @@ class _VerificationPageState extends State<VerificationPage> {
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: submitting ? null : submitVerification,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff765640),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                onPressed: submitting
+                    ? null
+                    : submitVerification,
+                style:
+                    ElevatedButton.styleFrom(
+                  backgroundColor:
+                      const Color(
+                    0xff765640,
+                  ),
+                  foregroundColor:
+                      Colors.white,
+                  shape:
+                      RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(
+                      16,
+                    ),
                   ),
                 ),
                 child: submitting
@@ -399,9 +574,11 @@ class _VerificationPageState extends State<VerificationPage> {
                       )
                     : const Text(
                         'Submit Verification',
-                        style: TextStyle(
+                        style:
+                            TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontWeight:
+                              FontWeight.bold,
                         ),
                       ),
               ),

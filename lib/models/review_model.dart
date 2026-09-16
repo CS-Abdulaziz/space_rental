@@ -17,21 +17,21 @@ class ReviewModel {
     this.createdAt,
   });
 
-  factory ReviewModel.fromMap(Map<String, dynamic> map) {
+  factory ReviewModel.fromJson(Map<String, dynamic> json) {
     return ReviewModel(
-      id: map['id']?.toString() ?? '',
-      bookingId: map['booking_id']?.toString() ?? '',
-      spaceId: map['space_id']?.toString() ?? '',
-      renterId: map['renter_id']?.toString() ?? '',
-      rating: int.tryParse(map['rating']?.toString() ?? '') ?? 0,
-      comment: map['comment']?.toString() ?? '',
-      createdAt: map['created_at'] == null
-          ? null
-          : DateTime.tryParse(map['created_at'].toString()),
+      id: json['id']?.toString() ?? '',
+      bookingId: json['booking_id']?.toString() ?? '',
+      spaceId: json['space_id']?.toString() ?? '',
+      renterId: json['renter_id']?.toString() ?? '',
+      rating: (json['rating'] as num?)?.toInt() ?? 0,
+      comment: json['comment']?.toString() ?? '',
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'booking_id': bookingId,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/space_model.dart';
+import '../../models/booking_model.dart';
+
 class OwnerBookingsPage extends StatefulWidget {
   const OwnerBookingsPage({super.key});
 
@@ -20,7 +23,9 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
   static const white = Color(0xffFFFCF8);
 
   bool loading = true;
-  List<Map<String, dynamic>> bookings = [];
+
+  List<BookingModel> bookings = [];
+  List<SpaceModel> spaces = [];
 
   @override
   void initState() {
@@ -34,15 +39,20 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
 
       if (user == null) return;
 
-      final spaces = await supabase
+      // =========================
+      // LOAD OWNER SPACES
+      // =========================
+
+      final spacesResult = await supabase
           .from('spaces')
-          .select('id')
+          .select('*, space_images(image_url)')
           .eq('owner_id', user.id);
 
-      if (spaces.isEmpty) {
+      if (spacesResult.isEmpty) {
         if (!mounted) return;
 
         setState(() {
+          spaces = [];
           bookings = [];
           loading = false;
         });
@@ -50,8 +60,26 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
         return;
       }
 
+      final Map<String, SpaceModel> uniqueSpaces = {};
+
+      for (final item in spacesResult) {
+        final json =
+            Map<String, dynamic>.from(item);
+
+        final space =
+            SpaceModel.fromJson(json);
+
+        uniqueSpaces[space.id] = space;
+      }
+
+      spaces = uniqueSpaces.values.toList();
+
       final spaceIds =
-          spaces.map((space) => space['id'].toString()).toList();
+          spaces.map((space) => space.id).toList();
+
+      // =========================
+      // LOAD BOOKINGS
+      // =========================
 
       final result = await supabase
           .from('bookings')
@@ -65,17 +93,40 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
               monthly_price
             )
           ''')
-          .inFilter('space_id', spaceIds)
-          .order('start_date', ascending: true);
+          .inFilter(
+            'space_id',
+            spaceIds,
+          )
+          .order(
+            'start_date',
+            ascending: true,
+          );
+
+      final Map<String, BookingModel>
+          uniqueBookings = {};
+
+      for (final item in result) {
+        final json =
+            Map<String, dynamic>.from(item);
+
+        final booking =
+            BookingModel.fromJson(json);
+
+        uniqueBookings[booking.id] = booking;
+      }
+
+      bookings =
+          uniqueBookings.values.toList();
 
       if (!mounted) return;
 
       setState(() {
-        bookings = List<Map<String, dynamic>>.from(result);
         loading = false;
       });
     } catch (e) {
-      debugPrint('OWNER BOOKINGS ERROR: $e');
+      debugPrint(
+        'OWNER BOOKINGS ERROR: $e',
+      );
 
       if (!mounted) return;
 
@@ -85,29 +136,67 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     }
   }
 
+  SpaceModel? getSpaceForBooking(
+    BookingModel booking,
+  ) {
+    try {
+      return spaces.firstWhere(
+        (space) =>
+            space.id == booking.spaceId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   int get confirmedCount {
-    return bookings.where((b) => b['status'] == 'confirmed').length;
+    return bookings.where(
+      (booking) =>
+          booking.status.toLowerCase() ==
+          'confirmed',
+    ).length;
   }
 
   int get pendingCount {
-    return bookings.where((b) => b['status'] == 'pending').length;
+    return bookings.where(
+      (booking) =>
+          booking.status.toLowerCase() ==
+          'pending',
+    ).length;
   }
 
   double get earnings {
     double total = 0;
 
     for (final booking in bookings) {
-      if (booking['status'] == 'confirmed' ||
-          booking['status'] == 'completed') {
-        total +=
-            double.tryParse(
-                  booking['total_price']?.toString() ?? '0',
-                ) ??
-                0;
+      final status =
+          booking.status.toLowerCase();
+
+      if (status == 'confirmed' ||
+          status == 'completed') {
+        total += booking.totalPrice ?? 0;
       }
     }
 
     return total;
+  }
+
+  String formatDate(dynamic value) {
+    if (value == null) return '-';
+
+    try {
+      final date = value is DateTime
+          ? value
+          : DateTime.parse(
+              value.toString(),
+            );
+
+      return '${date.year}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return value.toString();
+    }
   }
 
   @override
@@ -117,7 +206,8 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
       body: SafeArea(
         child: loading
             ? const Center(
-                child: CircularProgressIndicator(
+                child:
+                    CircularProgressIndicator(
                   color: brown,
                 ),
               )
@@ -125,8 +215,10 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                 color: brown,
                 onRefresh: loadBookings,
                 child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
+                  physics:
+                      const AlwaysScrollableScrollPhysics(),
+                  padding:
+                      const EdgeInsets.fromLTRB(
                     20,
                     20,
                     20,
@@ -138,21 +230,26 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                     _summary(),
                     const SizedBox(height: 27),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment:
+                          MainAxisAlignment
+                              .spaceBetween,
                       children: [
                         const Text(
                           'All Bookings',
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight: FontWeight.w700,
+                            fontWeight:
+                                FontWeight.w700,
                             color: darkBrown,
                           ),
                         ),
                         Text(
                           '${bookings.length}',
-                          style: const TextStyle(
+                          style:
+                              const TextStyle(
                             fontSize: 13,
-                            color: lightBrown,
+                            color:
+                                lightBrown,
                           ),
                         ),
                       ],
@@ -162,7 +259,10 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                       _emptyState()
                     else
                       ...bookings.map(
-                        (booking) => _bookingCard(booking),
+                        (booking) =>
+                            _bookingCard(
+                          booking,
+                        ),
                       ),
                   ],
                 ),
@@ -176,13 +276,15 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
       children: [
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               const Text(
                 'Bookings',
                 style: TextStyle(
                   fontSize: 29,
-                  fontWeight: FontWeight.w700,
+                  fontWeight:
+                      FontWeight.w700,
                   color: darkBrown,
                 ),
               ),
@@ -202,9 +304,11 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           child: Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(
+            decoration:
+                BoxDecoration(
               color: softCream,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius:
+                  BorderRadius.circular(14),
             ),
             child: const Icon(
               Icons.refresh_rounded,
@@ -218,15 +322,20 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
 
   Widget _summary() {
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
+      padding:
+          const EdgeInsets.all(18),
+      decoration:
+          BoxDecoration(
         color: brown,
-        borderRadius: BorderRadius.circular(25),
+        borderRadius:
+            BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.10),
+            color:
+                Colors.black.withOpacity(.10),
             blurRadius: 20,
-            offset: const Offset(0, 8),
+            offset:
+                const Offset(0, 8),
           ),
         ],
       ),
@@ -236,13 +345,15 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
             child: _summaryItem(
               confirmedCount.toString(),
               'Confirmed',
-              Icons.check_circle_outline_rounded,
+              Icons
+                  .check_circle_outline_rounded,
             ),
           ),
           Container(
             width: 1,
             height: 50,
-            color: Colors.white.withOpacity(.18),
+            color:
+                Colors.white.withOpacity(.18),
           ),
           Expanded(
             child: _summaryItem(
@@ -254,7 +365,8 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           Container(
             width: 1,
             height: 50,
-            color: Colors.white.withOpacity(.18),
+            color:
+                Colors.white.withOpacity(.18),
           ),
           Expanded(
             child: _summaryItem(
@@ -286,13 +398,15 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 17,
-            fontWeight: FontWeight.w700,
+            fontWeight:
+                FontWeight.w700,
           ),
         ),
         const SizedBox(height: 3),
         Text(
           title,
-          textAlign: TextAlign.center,
+          textAlign:
+              TextAlign.center,
           style: const TextStyle(
             color: Colors.white70,
             fontSize: 9,
@@ -303,50 +417,62 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
   }
 
   Widget _bookingCard(
-    Map<String, dynamic> booking,
+    BookingModel booking,
   ) {
-    final space = booking['spaces'];
+    final space =
+        getSpaceForBooking(booking);
 
-    final title = space is Map
-        ? space['title']?.toString() ?? 'Space'
+    final title = space != null &&
+            space.title.isNotEmpty
+        ? space.title
         : 'Space';
 
-    final address = space is Map
-        ? space['address']?.toString() ?? ''
-        : '';
+    final address =
+        space?.address ?? '';
 
-    final type = space is Map
-        ? space['type']?.toString() ?? ''
-        : '';
+    final type =
+        space?.type ?? '';
 
     final status =
-        booking['status']?.toString() ?? 'pending';
+        booking.status.isNotEmpty
+            ? booking.status.toLowerCase()
+            : 'pending';
 
     final total =
-        booking['total_price']?.toString() ?? '0';
+        booking.totalPrice ?? 0;
 
     final rentalType =
-        booking['rental_type']?.toString() ?? 'Daily';
+        booking.rentalType.isNotEmpty
+            ? booking.rentalType
+            : 'Daily';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
+      margin:
+          const EdgeInsets.only(bottom: 16),
+      padding:
+          const EdgeInsets.all(17),
+      decoration:
+          BoxDecoration(
         color: white,
-        borderRadius: BorderRadius.circular(23),
+        borderRadius:
+            BorderRadius.circular(23),
         border: Border.all(
-          color: const Color(0xffE5D9CC),
+          color:
+              const Color(0xffE5D9CC),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.035),
+            color:
+                Colors.black.withOpacity(.035),
             blurRadius: 12,
-            offset: const Offset(0, 5),
+            offset:
+                const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -354,10 +480,13 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                 child: Text(
                   title,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(
                     fontSize: 17,
-                    fontWeight: FontWeight.w700,
+                    fontWeight:
+                        FontWeight.w700,
                     color: darkBrown,
                   ),
                 ),
@@ -369,7 +498,8 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           Row(
             children: [
               const Icon(
-                Icons.location_on_outlined,
+                Icons
+                    .location_on_outlined,
                 size: 14,
                 color: lightBrown,
               ),
@@ -378,8 +508,10 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                 child: Text(
                   address,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(
                     fontSize: 11,
                     color: lightBrown,
                   ),
@@ -396,7 +528,8 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
               ),
               const SizedBox(width: 8),
               _pill(
-                Icons.calendar_today_outlined,
+                Icons
+                    .calendar_today_outlined,
                 rentalType,
               ),
             ],
@@ -407,32 +540,40 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
               Expanded(
                 child: _dateBox(
                   'START DATE',
-                  booking['start_date']?.toString() ?? '-',
+                  formatDate(
+                    booking.startDate,
+                  ),
                 ),
               ),
               const SizedBox(width: 9),
               Expanded(
                 child: _dateBox(
                   'END DATE',
-                  booking['end_date']?.toString() ?? '-',
+                  formatDate(
+                    booking.endDate,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 15),
           Container(
-            padding: const EdgeInsets.symmetric(
+            padding:
+                const EdgeInsets.symmetric(
               horizontal: 13,
               vertical: 12,
             ),
-            decoration: BoxDecoration(
+            decoration:
+                BoxDecoration(
               color: cream,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius:
+                  BorderRadius.circular(14),
             ),
             child: Row(
               children: [
                 const Icon(
-                  Icons.account_balance_wallet_outlined,
+                  Icons
+                      .account_balance_wallet_outlined,
                   size: 18,
                   color: brown,
                 ),
@@ -447,10 +588,12 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                   ),
                 ),
                 Text(
-                  '$total SAR',
-                  style: const TextStyle(
+                  '${total.toStringAsFixed(0)} SAR',
+                  style:
+                      const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontWeight:
+                        FontWeight.w700,
                     color: brown,
                   ),
                 ),
@@ -461,7 +604,8 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           Row(
             children: [
               const Icon(
-                Icons.check_circle_rounded,
+                Icons
+                    .check_circle_rounded,
                 size: 15,
                 color: mediumBrown,
               ),
@@ -474,10 +618,12 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                         : status == 'completed'
                             ? 'Payment completed'
                             : 'Booking cancelled',
-                style: const TextStyle(
+                style:
+                    const TextStyle(
                   fontSize: 10,
                   color: mediumBrown,
-                  fontWeight: FontWeight.w600,
+                  fontWeight:
+                      FontWeight.w600,
                 ),
               ),
             ],
@@ -501,22 +647,27 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding:
+          const EdgeInsets.symmetric(
         horizontal: 9,
         vertical: 6,
       ),
-      decoration: BoxDecoration(
+      decoration:
+          BoxDecoration(
         color: status == 'confirmed' ||
                 status == 'completed'
             ? const Color(0xffE8DED2)
             : const Color(0xffF1E6D8),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius:
+            BorderRadius.circular(9),
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style:
+            const TextStyle(
           fontSize: 8,
-          fontWeight: FontWeight.w700,
+          fontWeight:
+              FontWeight.w700,
           color: brown,
         ),
       ),
@@ -528,16 +679,20 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     String text,
   ) {
     return Container(
-      padding: const EdgeInsets.symmetric(
+      padding:
+          const EdgeInsets.symmetric(
         horizontal: 9,
         vertical: 7,
       ),
-      decoration: BoxDecoration(
+      decoration:
+          BoxDecoration(
         color: softCream,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius:
+            BorderRadius.circular(10),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize:
+            MainAxisSize.min,
         children: [
           Icon(
             icon,
@@ -547,9 +702,11 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           const SizedBox(width: 5),
           Text(
             text,
-            style: const TextStyle(
+            style:
+                const TextStyle(
               fontSize: 9,
-              fontWeight: FontWeight.w600,
+              fontWeight:
+                  FontWeight.w600,
               color: mediumBrown,
             ),
           ),
@@ -563,29 +720,37 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     String date,
   ) {
     return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
+      padding:
+          const EdgeInsets.all(11),
+      decoration:
+          BoxDecoration(
         color: cream,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius:
+            BorderRadius.circular(13),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style:
+                const TextStyle(
               fontSize: 8,
               color: lightBrown,
-              fontWeight: FontWeight.w600,
+              fontWeight:
+                  FontWeight.w600,
             ),
           ),
           const SizedBox(height: 5),
           Text(
             date,
-            style: const TextStyle(
+            style:
+                const TextStyle(
               fontSize: 11,
               color: brown,
-              fontWeight: FontWeight.w700,
+              fontWeight:
+                  FontWeight.w700,
             ),
           ),
         ],
@@ -595,19 +760,25 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
 
   Widget _emptyState() {
     return Container(
-      margin: const EdgeInsets.only(top: 20),
-      padding: const EdgeInsets.all(35),
-      decoration: BoxDecoration(
+      margin:
+          const EdgeInsets.only(top: 20),
+      padding:
+          const EdgeInsets.all(35),
+      decoration:
+          BoxDecoration(
         color: white,
-        borderRadius: BorderRadius.circular(25),
+        borderRadius:
+            BorderRadius.circular(25),
         border: Border.all(
-          color: const Color(0xffE5D9CC),
+          color:
+              const Color(0xffE5D9CC),
         ),
       ),
       child: const Column(
         children: [
           Icon(
-            Icons.calendar_month_outlined,
+            Icons
+                .calendar_month_outlined,
             size: 48,
             color: lightBrown,
           ),
@@ -616,7 +787,8 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
             'No bookings yet',
             style: TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w700,
+              fontWeight:
+                  FontWeight.w700,
               color: darkBrown,
             ),
           ),
@@ -624,7 +796,8 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           Text(
             'When renters book your spaces, '
             'their reservations will appear here.',
-            textAlign: TextAlign.center,
+            textAlign:
+                TextAlign.center,
             style: TextStyle(
               fontSize: 11,
               height: 1.5,

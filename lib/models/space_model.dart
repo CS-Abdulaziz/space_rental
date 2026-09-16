@@ -35,46 +35,37 @@ class SpaceModel {
     this.imageUrls = const [],
   });
 
-  factory SpaceModel.fromMap(Map<String, dynamic> map) {
+  factory SpaceModel.fromJson(Map<String, dynamic> json) {
+    final images = json['space_images'];
+
     return SpaceModel(
-      id: map['id']?.toString() ?? '',
-      ownerId: map['owner_id']?.toString() ?? '',
-      title: map['title']?.toString() ?? '',
-      type: map['type']?.toString() ?? '',
-      description: map['description']?.toString() ?? '',
-      address: map['address']?.toString() ?? '',
-      latitude: map['latitude'] == null
-          ? null
-          : double.tryParse(map['latitude'].toString()),
-      longitude: map['longitude'] == null
-          ? null
-          : double.tryParse(map['longitude'].toString()),
-      size: map['size'] == null
-          ? null
-          : double.tryParse(map['size'].toString()),
-      dailyPrice: map['daily_price'] == null
-          ? null
-          : double.tryParse(map['daily_price'].toString()),
-      monthlyPrice: map['monthly_price'] == null
-          ? null
-          : double.tryParse(map['monthly_price'].toString()),
-      availability: map['availability']?.toString() ?? '',
-      status: map['status']?.toString() ?? '',
-      verified: map['verified'] == true,
-      createdAt: map['created_at'] == null
-          ? null
-          : DateTime.tryParse(map['created_at'].toString()),
-      imageUrls: map['image_urls'] is List
-          ? List<String>.from(
-              (map['image_urls'] as List).map(
-                (image) => image.toString(),
-              ),
-            )
+      id: json['id']?.toString() ?? '',
+      ownerId: json['owner_id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      type: json['type']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      size: (json['size'] as num?)?.toDouble(),
+      dailyPrice: (json['daily_price'] as num?)?.toDouble(),
+      monthlyPrice: (json['monthly_price'] as num?)?.toDouble(),
+      availability: json['availability']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      verified: json['verified'] == true,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
+      imageUrls: images is List
+          ? images
+              .map((image) => image['image_url']?.toString() ?? '')
+              .where((url) => url.isNotEmpty)
+              .toList()
           : [],
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'owner_id': ownerId,

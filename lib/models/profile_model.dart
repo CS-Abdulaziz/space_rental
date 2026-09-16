@@ -1,41 +1,41 @@
 class ProfileModel {
   final String id;
+  final DateTime? createdAt;
   final String fullName;
   final String email;
   final String phone;
   final String role;
-  final DateTime? createdAt;
 
   ProfileModel({
     required this.id,
+    this.createdAt,
     required this.fullName,
     required this.email,
     required this.phone,
     required this.role,
-    this.createdAt,
   });
 
-  factory ProfileModel.fromMap(Map<String, dynamic> map) {
+  factory ProfileModel.fromJson(Map<String, dynamic> json) {
     return ProfileModel(
-      id: map['id']?.toString() ?? '',
-      fullName: map['full_name']?.toString() ?? '',
-      email: map['email']?.toString() ?? '',
-      phone: map['phone']?.toString() ?? '',
-      role: map['role']?.toString() ?? '',
-      createdAt: map['created_at'] == null
-          ? null
-          : DateTime.tryParse(map['created_at'].toString()),
+      id: json['id']?.toString() ?? '',
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
+      fullName: json['full_name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      role: json['role']?.toString() ?? '',
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'created_at': createdAt?.toIso8601String(),
       'full_name': fullName,
       'email': email,
       'phone': phone,
       'role': role,
-      'created_at': createdAt?.toIso8601String(),
     };
   }
 }

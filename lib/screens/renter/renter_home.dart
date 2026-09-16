@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/booking_model.dart';
+import '../../models/profile_model.dart';
+import '../../models/space_model.dart';
 import '../auth/login_page.dart';
 import 'booking_payment.dart';
 
@@ -19,13 +22,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
   bool loading = true;
 
-  List<Map<String, dynamic>> spaces = [];
-  List<Map<String, dynamic>> savedSpaces = [];
-  List<Map<String, dynamic>> bookings = [];
+  List<SpaceModel> spaces = [];
+  Set<String> savedSpaceIds = {};
+  List<BookingModel> bookings = [];
 
-  String userName = 'User';
-  String userEmail = '';
-  String userPhone = '';
+  ProfileModel? profile;
 
   final TextEditingController searchController =
       TextEditingController();
@@ -52,10 +53,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
     super.dispose();
   }
 
-  // =========================================================
-  // LOAD DATA
-  // =========================================================
-
   Future<void> loadData() async {
     if (mounted) {
       setState(() {
@@ -67,65 +64,64 @@ class _RenterHomePageState extends State<RenterHomePage> {
       final user = supabase.auth.currentUser;
 
       if (user != null) {
-        userEmail = user.email ?? '';
-
         final profileResponse = await supabase
             .from('profiles')
-            .select('full_name, email, phone')
+            .select('id, created_at, full_name, email, phone, role')
             .eq('id', user.id)
             .maybeSingle();
 
         if (profileResponse != null) {
-          userName =
-              (profileResponse['full_name'] ?? 'User').toString();
-
-          if ((profileResponse['email'] ?? '')
-              .toString()
-              .isNotEmpty) {
-            userEmail =
-                profileResponse['email'].toString();
-          }
-
-          userPhone =
-              (profileResponse['phone'] ?? '').toString();
+          profile = ProfileModel.fromJson(
+            Map<String, dynamic>.from(profileResponse),
+          );
         }
       }
 
-      // SPACES
       final spacesResponse = await supabase
           .from('spaces')
           .select('*, space_images(*)')
           .eq('status', 'active')
           .order('created_at', ascending: false);
 
-      final loadedSpaces =
-          List<Map<String, dynamic>>.from(spacesResponse);
+      final loadedSpaces = spacesResponse
+          .map<SpaceModel>(
+            (json) => SpaceModel.fromJson(
+              Map<String, dynamic>.from(json),
+            ),
+          )
+          .toList();
 
       if (user != null) {
-        // SAVED SPACES
         final savedResponse = await supabase
             .from('saved_spaces')
             .select('space_id')
             .eq('user_id', user.id);
 
-        final loadedSavedSpaces =
-            List<Map<String, dynamic>>.from(savedResponse);
+        final loadedSavedSpaceIds = savedResponse
+            .map<String>(
+              (item) => item['space_id'].toString(),
+            )
+            .toSet();
 
-        // BOOKINGS
         final bookingResponse = await supabase
             .from('bookings')
             .select('*, spaces(*)')
             .eq('renter_id', user.id)
             .order('start_date', ascending: false);
 
-        final loadedBookings =
-            List<Map<String, dynamic>>.from(bookingResponse);
+        final loadedBookings = bookingResponse
+            .map<BookingModel>(
+              (json) => BookingModel.fromJson(
+                Map<String, dynamic>.from(json),
+              ),
+            )
+            .toList();
 
         if (!mounted) return;
 
         setState(() {
           spaces = loadedSpaces;
-          savedSpaces = loadedSavedSpaces;
+          savedSpaceIds = loadedSavedSpaceIds;
           bookings = loadedBookings;
           loading = false;
         });
@@ -134,7 +130,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
 
         setState(() {
           spaces = loadedSpaces;
-          savedSpaces = [];
+          savedSpaceIds = {};
           bookings = [];
           loading = false;
         });
@@ -150,14 +146,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
     }
   }
 
-  // =========================================================
-  // SAVED
-  // =========================================================
-
   bool isSaved(String spaceId) {
-    return savedSpaces.any(
-      (item) => item['space_id'].toString() == spaceId,
-    );
+    return savedSpaceIds.contains(spaceId);
   }
 
   Future<void> toggleSaved(String spaceId) async {
@@ -176,10 +166,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
         if (!mounted) return;
 
         setState(() {
-          savedSpaces.removeWhere(
-            (item) =>
-                item['space_id'].toString() == spaceId,
-          );
+          savedSpaceIds.remove(spaceId);
         });
       } else {
         await supabase.from('saved_spaces').insert({
@@ -190,9 +177,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
         if (!mounted) return;
 
         setState(() {
-          savedSpaces.add({
-            'space_id': spaceId,
-          });
+          savedSpaceIds.add(spaceId);
         });
       }
     } catch (e) {
@@ -200,28 +185,12 @@ class _RenterHomePageState extends State<RenterHomePage> {
     }
   }
 
-  // =========================================================
-  // FILTER + SEARCH
-  // =========================================================
-
-  List<Map<String, dynamic>> get filteredSpaces {
+  List<SpaceModel> get filteredSpaces {
     return spaces.where((space) {
-      final type = (space['type'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-
-      final title = (space['title'] ?? '')
-          .toString()
-          .toLowerCase();
-
-      final address = (space['address'] ?? '')
-          .toString()
-          .toLowerCase();
-
-      final description = (space['description'] ?? '')
-          .toString()
-          .toLowerCase();
+      final type = space.type.trim().toLowerCase();
+      final title = space.title.toLowerCase();
+      final address = space.address.toLowerCase();
+      final description = space.description.toLowerCase();
 
       final categoryMatch =
           selectedCategory == 'All' ||
@@ -238,33 +207,17 @@ class _RenterHomePageState extends State<RenterHomePage> {
     }).toList();
   }
 
-  // =========================================================
-  // SPACE IMAGE
-  // =========================================================
-
-  String getSpaceImage(Map<String, dynamic> space) {
-    final images = space['space_images'];
-
-    if (images is List && images.isNotEmpty) {
-      for (final image in images) {
-        final url = image['image_url'];
-
-        if (url != null &&
-            url.toString().trim().isNotEmpty) {
-          return url.toString();
-        }
-      }
+  String getSpaceImage(SpaceModel space) {
+    if (space.imageUrls.isNotEmpty) {
+      return space.imageUrls.first;
     }
 
     return '';
   }
 
-  String getFallbackImage(Map<String, dynamic> space) {
-    final title =
-        (space['title'] ?? '').toString().toLowerCase();
-
-    final type =
-        (space['type'] ?? '').toString().toLowerCase();
+  String getFallbackImage(SpaceModel space) {
+    final title = space.title.toLowerCase();
+    final type = space.type.toLowerCase();
 
     if (title.contains('parking') || type == 'parking') {
       return 'assets/images/parking.jpeg';
@@ -281,25 +234,17 @@ class _RenterHomePageState extends State<RenterHomePage> {
     return 'assets/images/other.jpeg';
   }
 
-  String getPrice(Map<String, dynamic> space) {
-    final daily = space['daily_price'];
-
-    if (daily != null) {
-      return '${daily.toString()} SAR / day';
+  String getPrice(SpaceModel space) {
+    if (space.dailyPrice != null) {
+      return '${space.dailyPrice} SAR / day';
     }
 
-    final monthly = space['monthly_price'];
-
-    if (monthly != null) {
-      return '${monthly.toString()} SAR / month';
+    if (space.monthlyPrice != null) {
+      return '${space.monthlyPrice} SAR / month';
     }
 
     return 'Price unavailable';
   }
-
-  // =========================================================
-  // BUILD
-  // =========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -352,10 +297,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
       ),
     );
   }
-
-  // =========================================================
-  // EXPLORE
-  // =========================================================
 
   Widget buildExplore() {
     return RefreshIndicator(
@@ -593,13 +534,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
     );
   }
 
-  // =========================================================
-  // SPACE CARD
-  // =========================================================
-
-  Widget buildSpaceCard(
-      Map<String, dynamic> space) {
-    final id = space['id'].toString();
+  Widget buildSpaceCard(SpaceModel space) {
+    final id = space.id;
 
     final imageUrl =
         getSpaceImage(space);
@@ -614,12 +550,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
           MaterialPageRoute(
             builder: (_) =>
                 BookingPaymentPage(
-              space: space,
+              space: space.toJson(),
             ),
           ),
         );
 
-        // Refresh immediately after booking
         if (result == true) {
           await loadData();
 
@@ -734,8 +669,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                   ),
                 ),
 
-                if (space['verified'] ==
-                    true)
+                if (space.verified)
                   Positioned(
                     top: 14,
                     left: 14,
@@ -798,8 +732,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                         .start,
                 children: [
                   Text(
-                    space['title'] ??
-                        'Available Space',
+                    space.title.isNotEmpty
+                        ? space.title
+                        : 'Available Space',
                     style:
                         const TextStyle(
                       fontSize: 19,
@@ -829,8 +764,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                       ),
                       Expanded(
                         child: Text(
-                          space['address'] ??
-                              'Riyadh',
+                          space.address.isNotEmpty
+                              ? space.address
+                              : 'Riyadh',
                           style:
                               const TextStyle(
                             color:
@@ -857,8 +793,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                         ),
                         decoration:
                             BoxDecoration(
-                          color:
-                              const Color(
+                          color: const Color(
                             0xfff0e9e0,
                           ),
                           borderRadius:
@@ -868,8 +803,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           ),
                         ),
                         child: Text(
-                          space['type'] ??
-                              'Other',
+                          space.type.isNotEmpty
+                              ? space.type
+                              : 'Other',
                           style:
                               const TextStyle(
                             color: Color(
@@ -907,16 +843,11 @@ class _RenterHomePageState extends State<RenterHomePage> {
       ),
     );
   }
-  // =========================================================
-  // SAVED
-  // =========================================================
 
   Widget buildSaved() {
     final saved = spaces.where(
       (space) {
-        return isSaved(
-          space['id'].toString(),
-        );
+        return isSaved(space.id);
       },
     ).toList();
 
@@ -985,191 +916,149 @@ class _RenterHomePageState extends State<RenterHomePage> {
     );
   }
 
-  // =========================================================
-  // BOOKING
-  // =========================================================
-
   Widget buildBookings() {
-    return RefreshIndicator(
-      onRefresh: loadData,
-      child: ListView(
-        padding:
-            const EdgeInsets.fromLTRB(
-          20,
-          20,
-          20,
-          30,
+    return ListView(
+      padding:
+          const EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        30,
+      ),
+      children: [
+        const Text(
+          'Booking',
+          style: TextStyle(
+            fontFamily: 'Georgia',
+            fontSize: 30,
+            fontWeight:
+                FontWeight.bold,
+            fontStyle:
+                FontStyle.italic,
+            color:
+                Color(0xff5f4633),
+          ),
         ),
-        children: [
-          const Text(
-            'Booking',
-            style: TextStyle(
-              fontFamily: 'Georgia',
-              fontSize: 30,
-              fontWeight:
-                  FontWeight.bold,
-              fontStyle:
-                  FontStyle.italic,
-              color:
-                  Color(0xff5f4633),
+
+        const SizedBox(
+          height: 6,
+        ),
+
+        Text(
+          '${bookings.length} bookings',
+          style:
+              const TextStyle(
+            fontSize: 16,
+            color: Colors.grey,
+          ),
+        ),
+
+        const SizedBox(
+          height: 22,
+        ),
+
+        if (bookings.isEmpty)
+          const Padding(
+            padding:
+                EdgeInsets.only(
+              top: 100,
             ),
-          ),
-
-          const SizedBox(
-            height: 6,
-          ),
-
-          Text(
-            '${bookings.length} bookings',
-            style:
-                const TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
-            ),
-          ),
-
-          const SizedBox(
-            height: 22,
-          ),
-
-          if (bookings.isEmpty)
-            const Padding(
-              padding:
-                  EdgeInsets.only(
-                top: 100,
-              ),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons
-                          .calendar_today_outlined,
-                      size: 50,
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons
+                        .calendar_today_outlined,
+                    size: 50,
+                    color:
+                        Colors.grey,
+                  ),
+                  SizedBox(
+                    height: 15,
+                  ),
+                  Text(
+                    'No bookings yet',
+                    style:
+                        TextStyle(
+                      fontSize: 17,
                       color:
                           Colors.grey,
                     ),
-                    SizedBox(
-                      height: 15,
-                    ),
-                    Text(
-                      'No bookings yet',
-                      style:
-                          TextStyle(
-                        fontSize: 17,
-                        color:
-                            Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            ...bookings.map(
-              (booking) =>
-                  buildBookingCard(
-                booking,
+                  ),
+                ],
               ),
             ),
-        ],
-      ),
+          )
+        else
+          ...bookings.map(
+            (booking) =>
+                buildBookingCard(
+              booking,
+            ),
+          ),
+      ],
     );
   }
+  Widget buildBookingCard(BookingModel booking) {
+    final space = spaces.cast<SpaceModel?>().firstWhere(
+      (item) => item?.id == booking.spaceId,
+      orElse: () => null,
+    );
 
-  Widget buildBookingCard(
-      Map<String, dynamic>
-          booking) {
-    final space =
-        booking['spaces'];
-
-    final title = space is Map
-        ? (space['title'] ??
-                'Space')
-            .toString()
+    final title = space?.title.isNotEmpty == true
+        ? space!.title
         : 'Space';
 
-    final address = space is Map
-        ? (space['address'] ??
-                'Riyadh')
-            .toString()
+    final address = space?.address.isNotEmpty == true
+        ? space!.address
         : 'Riyadh';
 
-    final type = space is Map
-        ? (space['type'] ??
-                'Other')
-            .toString()
+    final type = space?.type.isNotEmpty == true
+        ? space!.type
         : 'Other';
 
-    final rentalType =
-        (booking['rental_type'] ??
-                'daily')
-            .toString();
+    final rentalType = booking.rentalType.isNotEmpty
+        ? booking.rentalType
+        : 'daily';
 
-    final status =
-        (booking['status'] ??
-                'pending')
-            .toString()
-            .toLowerCase();
+    final status = booking.status.isNotEmpty
+        ? booking.status.toLowerCase()
+        : 'pending';
 
     final startDate =
-        booking['start_date']
-                ?.toString() ??
-            '-';
+        booking.startDate.toIso8601String().split('T').first;
 
     final endDate =
-        booking['end_date']
-                ?.toString() ??
-            '-';
+        booking.endDate.toIso8601String().split('T').first;
 
     final totalPrice =
-        booking['total_price']
-                ?.toString() ??
-            '0';
+        booking.totalPrice?.toString() ?? '0';
 
-    final totalDays =
-        booking['total_days']
-                ?.toString() ??
-            '-';
+    final totalDays = booking.totalDays.toString();
 
     final pricePerDay =
-        booking['price_per_day']
-                ?.toString() ??
-            '0';
+        booking.pricePerDay?.toString() ?? '0';
 
     final pricePerMonth =
-        booking['price_per_month']
-                ?.toString() ??
-            '0';
+        booking.pricePerMonth?.toString() ?? '0';
 
     final serviceFee =
-        booking['service_fee']
-                ?.toString() ??
-            '0';
+        booking.serviceFee?.toString() ?? '0';
 
     Color statusColor;
 
-    if (status ==
-        'confirmed') {
-      statusColor =
-          Colors.green;
-    } else if (status ==
-        'completed') {
-      statusColor =
-          const Color(
-        0xff6f8f72,
-      );
-    } else if (status ==
-        'cancelled') {
-      statusColor =
-          Colors.redAccent;
+    if (status == 'confirmed') {
+      statusColor = Colors.green;
+    } else if (status == 'completed') {
+      statusColor = const Color(0xff6f8f72);
+    } else if (status == 'cancelled') {
+      statusColor = Colors.redAccent;
     } else {
-      statusColor =
-          Colors.orange;
+      statusColor = Colors.orange;
     }
 
     final bool isMonthly =
-        rentalType.toLowerCase() ==
-            'monthly';
+        rentalType.toLowerCase() == 'monthly';
 
     return Container(
       margin:
@@ -1180,9 +1069,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
           BoxDecoration(
         color: Colors.white,
         borderRadius:
-            BorderRadius.circular(
-          24,
-        ),
+            BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black
@@ -1199,8 +1086,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
             width:
                 double.infinity,
             padding:
-                const EdgeInsets
-                    .fromLTRB(
+                const EdgeInsets.fromLTRB(
               18,
               17,
               18,
@@ -1289,7 +1175,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
                             size:
                                 15,
                             color:
-                                Colors.white70,
+                                Colors
+                                    .white70,
                           ),
                           const SizedBox(
                             width: 4,
@@ -1358,7 +1245,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           const Icon(
                             Icons
                                 .category_outlined,
-                            size: 15,
+                            size:
+                                15,
                             color:
                                 Color(
                               0xff76563d,
@@ -1416,7 +1304,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           const Icon(
                             Icons
                                 .calendar_month_outlined,
-                            size: 15,
+                            size:
+                                15,
                             color:
                                 Color(
                               0xff76563d,
@@ -1487,7 +1376,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
                       TextStyle(
                     fontSize: 14,
                     fontWeight:
-                        FontWeight.bold,
+                        FontWeight
+                            .bold,
                     color:
                         Color(
                       0xff5f4633,
@@ -1839,7 +1729,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
             style:
                 const TextStyle(
               fontSize: 13,
-              color: Colors.grey,
+              color:
+                  Colors.grey,
             ),
           ),
           Text(
@@ -1857,10 +1748,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
       ),
     );
   }
-
-  // =========================================================
-  // ACCOUNT
-  // =========================================================
 
   Widget buildAccount() {
     return ListView(
@@ -1893,8 +1780,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                         FontWeight
                             .bold,
                     fontStyle:
-                        FontStyle
-                            .italic,
+                        FontStyle.italic,
                     color:
                         Color(
                       0xff5f4633,
@@ -1931,7 +1817,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                 Icons
                     .person_outline,
                 color:
-                    Color(0xff76563d),
+                    Color(
+                  0xff76563d,
+                ),
                 size: 27,
               ),
             ),
@@ -1942,7 +1830,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
           height: 24,
         ),
 
-        // PROFILE CARD
         Container(
           padding:
               const EdgeInsets.all(
@@ -1969,16 +1856,15 @@ class _RenterHomePageState extends State<RenterHomePage> {
                   0xfff4f1eb,
                 ),
                 child: Text(
-                  userName.isNotEmpty
-                      ? userName[0]
+                  profile?.fullName.isNotEmpty == true
+                      ? profile!.fullName[0]
                           .toUpperCase()
                       : 'U',
                   style:
                       const TextStyle(
                     fontSize: 27,
                     fontWeight:
-                        FontWeight
-                            .w500,
+                        FontWeight.w500,
                     color:
                         Color(
                       0xff3f3329,
@@ -1999,7 +1885,9 @@ class _RenterHomePageState extends State<RenterHomePage> {
                           .start,
                   children: [
                     Text(
-                      userName,
+                      profile?.fullName.isNotEmpty == true
+                          ? profile!.fullName
+                          : 'User',
                       maxLines: 1,
                       overflow:
                           TextOverflow
@@ -2020,7 +1908,7 @@ class _RenterHomePageState extends State<RenterHomePage> {
                     ),
 
                     Text(
-                      userEmail,
+                      profile?.email ?? '',
                       maxLines: 1,
                       overflow:
                           TextOverflow
@@ -2033,13 +1921,13 @@ class _RenterHomePageState extends State<RenterHomePage> {
                       ),
                     ),
 
-                    if (userPhone
+                    if ((profile?.phone ?? '')
                         .isNotEmpty) ...[
                       const SizedBox(
                         height: 4,
                       ),
                       Text(
-                        userPhone,
+                        profile!.phone,
                         style:
                             const TextStyle(
                           color:
@@ -2083,7 +1971,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
           height: 12,
         ),
 
-        // PERSONAL INFORMATION
         accountTile(
           Icons.person_outline,
           'Personal Information',
@@ -2093,7 +1980,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
           },
         ),
 
-        // BOOKINGS
         accountTile(
           Icons.calendar_month_outlined,
           'My Bookings',
@@ -2105,7 +1991,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
           },
         ),
 
-        // SAVED
         accountTile(
           Icons.favorite_border,
           'Saved Spaces',
@@ -2117,7 +2002,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
           },
         ),
 
-        // SETTINGS
         accountTile(
           Icons.settings_outlined,
           'Settings',
@@ -2131,7 +2015,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
           height: 8,
         ),
 
-        // LOG OUT
         accountTile(
           Icons.logout,
           'Log Out',
@@ -2157,10 +2040,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
       ],
     );
   }
-
-  // =========================================================
-  // ACCOUNT TILE
-  // =========================================================
 
   Widget accountTile(
     IconData icon,
@@ -2240,10 +2119,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
     );
   }
 
-  // =========================================================
-  // PERSONAL INFORMATION
-  // =========================================================
-
   void showPersonalInformation() {
     showModalBottomSheet(
       context: context,
@@ -2298,21 +2173,21 @@ class _RenterHomePageState extends State<RenterHomePage> {
               personalInfoRow(
                 Icons.person_outline,
                 'Full Name',
-                userName,
+                profile?.fullName ?? 'User',
               ),
 
               personalInfoRow(
                 Icons.email_outlined,
                 'Email',
-                userEmail,
+                profile?.email ?? '',
               ),
 
               personalInfoRow(
                 Icons.phone_outlined,
                 'Phone',
-                userPhone.isEmpty
+                (profile?.phone ?? '').isEmpty
                     ? 'Not provided'
-                    : userPhone,
+                    : profile!.phone,
               ),
 
               const SizedBox(
@@ -2324,10 +2199,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
       },
     );
   }
-
-  // =========================================================
-  // PERSONAL INFO ROW
-  // =========================================================
 
   Widget personalInfoRow(
     IconData icon,
@@ -2355,7 +2226,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
           ),
 
           Expanded(
-            child: Column(
+            child:
+                Column(
               crossAxisAlignment:
                   CrossAxisAlignment
                       .start,
@@ -2395,10 +2267,6 @@ class _RenterHomePageState extends State<RenterHomePage> {
       ),
     );
   }
-
-  // =========================================================
-  // SETTINGS
-  // =========================================================
 
   void showSettings() {
     showModalBottomSheet(
@@ -2466,7 +2334,8 @@ class _RenterHomePageState extends State<RenterHomePage> {
               ),
 
               accountTile(
-                Icons.help_outline,
+                Icons
+                    .help_outline,
                 'Help & Support',
                 'Get help with SpaceOra',
                 () {},

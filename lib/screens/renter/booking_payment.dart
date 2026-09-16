@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/booking_model.dart';
+
 class BookingPaymentPage extends StatefulWidget {
   final Map<String, dynamic> space;
 
@@ -215,7 +217,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
       }
 
       // Create booking
-      final booking = await supabase
+      final bookingResponse = await supabase
           .from('bookings')
           .insert({
             'space_id': spaceId,
@@ -233,7 +235,12 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           .select()
           .single();
 
-      final bookingId = booking['id'];
+      // Convert JSON response to BookingModel
+      final BookingModel booking = BookingModel.fromJson(
+        Map<String, dynamic>.from(bookingResponse),
+      );
+
+      final bookingId = booking.id;
 
       // Demo payment
       final transactionReference =
@@ -282,8 +289,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
       if (!mounted) return;
 
-      // Return true so the previous page
-      // knows that a new booking was created.
+      // Tell renter_home that a booking was created
       Navigator.pop(context, true);
     } catch (e) {
       debugPrint(

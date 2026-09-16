@@ -21,35 +21,52 @@ class VerificationModel {
     this.reviewedAt,
   });
 
-  factory VerificationModel.fromMap(Map<String, dynamic> map) {
+  factory VerificationModel.fromJson(
+    Map<String, dynamic> json,
+  ) {
     return VerificationModel(
-      id: map['id']?.toString() ?? '',
-      ownerId: map['owner_id']?.toString() ?? '',
-      fullName: map['full_name']?.toString() ?? '',
-      demoIdNumber: map['demo_id_number']?.toString() ?? '',
-      ownershipType: map['ownership_type']?.toString() ?? '',
-      ownershipReference: map['ownership_reference']?.toString() ?? '',
-      status: map['status']?.toString() ?? '',
-      submittedAt: map['submitted_at'] == null
-          ? null
-          : DateTime.tryParse(map['submitted_at'].toString()),
-      reviewedAt: map['reviewed_at'] == null
-          ? null
-          : DateTime.tryParse(map['reviewed_at'].toString()),
+      id: json['id']?.toString() ?? '',
+      ownerId:
+          json['owner_id']?.toString() ?? '',
+      fullName:
+          json['full_name']?.toString() ?? '',
+      demoIdNumber:
+          json['demo_id_number']?.toString() ?? '',
+      ownershipType:
+          json['ownership_type']?.toString() ?? '',
+      ownershipReference:
+          json['ownership_reference']?.toString() ?? '',
+      status:
+          json['status']?.toString() ?? '',
+      submittedAt:
+          json['submitted_at'] != null
+              ? DateTime.tryParse(
+                  json['submitted_at'].toString(),
+                )
+              : null,
+      reviewedAt:
+          json['reviewed_at'] != null
+              ? DateTime.tryParse(
+                  json['reviewed_at'].toString(),
+                )
+              : null,
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'owner_id': ownerId,
       'full_name': fullName,
       'demo_id_number': demoIdNumber,
       'ownership_type': ownershipType,
-      'ownership_reference': ownershipReference,
+      'ownership_reference':
+          ownershipReference,
       'status': status,
-      'submitted_at': submittedAt?.toIso8601String(),
-      'reviewed_at': reviewedAt?.toIso8601String(),
+      'submitted_at':
+          submittedAt?.toIso8601String(),
+      'reviewed_at':
+          reviewedAt?.toIso8601String(),
     };
   }
 }

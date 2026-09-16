@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/space_model.dart';
+import '../../models/booking_model.dart';
+import '../../models/profile_model.dart';
+
 import '../auth/login_page.dart';
 import 'add_space.dart';
 import 'owner_profile.dart';
@@ -23,8 +27,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   String ownerEmail = '';
   String ownerPhone = '';
 
-  List<Map<String, dynamic>> spaces = [];
-  List<Map<String, dynamic>> bookings = [];
+  // Models
+  List<SpaceModel> spaces = [];
+  List<BookingModel> bookings = [];
+
+  // Related profiles for bookings
+  final Map<String, ProfileModel> renterProfiles = {};
 
   double earnings = 0;
 
@@ -71,24 +79,35 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         return;
       }
 
-      final profile = await supabase
+      // =========================
+      // PROFILE MODEL
+      // =========================
+
+      final profileJson = await supabase
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
-      if (profile != null) {
-        ownerName =
-            profile['full_name']?.toString() ?? 'Owner';
+      if (profileJson != null) {
+        final profile = ProfileModel.fromJson(
+          Map<String, dynamic>.from(profileJson),
+        );
 
-        ownerEmail =
-            profile['email']?.toString() ??
-                user.email ??
-                '';
+        ownerName = profile.fullName.isNotEmpty
+            ? profile.fullName
+            : 'Owner';
 
-        ownerPhone =
-            profile['phone']?.toString() ?? '';
+        ownerEmail = profile.email.isNotEmpty
+            ? profile.email
+            : user.email ?? '';
+
+        ownerPhone = profile.phone;
       }
+
+      // =========================
+      // SPACES MODEL
+      // =========================
 
       final spacesResult = await supabase
           .from('spaces')
@@ -99,31 +118,31 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             ascending: false,
           );
 
-      final Map<String, Map<String, dynamic>>
-          uniqueSpaces = {};
+      final Map<String, SpaceModel> uniqueSpaces = {};
 
       for (final item in spacesResult) {
-        final space =
-            Map<String, dynamic>.from(item);
+        final json = Map<String, dynamic>.from(item);
 
-        final id =
-            space['id']?.toString();
+        final id = json['id']?.toString();
 
         if (id != null) {
+          final space = SpaceModel.fromJson(json);
           uniqueSpaces[id] = space;
         }
       }
 
       spaces = uniqueSpaces.values.toList();
 
+      // =========================
+      // BOOKINGS MODEL
+      // =========================
+
       bookings = [];
+      renterProfiles.clear();
 
       if (spaces.isNotEmpty) {
         final spaceIds = spaces
-            .map(
-              (space) =>
-                  space['id'].toString(),
-            )
+            .map((space) => space.id)
             .toList();
 
         final bookingsResult = await supabase
@@ -140,63 +159,66 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               ascending: true,
             );
 
-        final Map<String, Map<String, dynamic>>
-            uniqueBookings = {};
+        final Map<String, BookingModel> uniqueBookings = {};
 
         for (final item in bookingsResult) {
-          final booking =
-              Map<String, dynamic>.from(item);
+          final json = Map<String, dynamic>.from(item);
 
-          final id =
-              booking['id']?.toString();
+          final id = json['id']?.toString();
 
           if (id != null) {
+            final booking = BookingModel.fromJson(json);
+
             uniqueBookings[id] = booking;
           }
         }
 
-        bookings =
-            uniqueBookings.values.toList();
+        bookings = uniqueBookings.values.toList();
+
+        // =========================
+        // RENTER PROFILE MODELS
+        // =========================
 
         for (final booking in bookings) {
-          final renterId =
-              booking['renter_id'];
+          final renterId = booking.renterId;
 
-          if (renterId != null) {
-            final renter =
-                await supabase
-                    .from('profiles')
-                    .select(
-                      'full_name,email',
-                    )
-                    .eq(
-                      'id',
-                      renterId,
-                    )
-                    .maybeSingle();
+          if (renterId.isNotEmpty) {
+            final renterJson = await supabase
+                .from('profiles')
+                .select(
+                  'id, created_at, full_name, email, phone, role',
+                )
+                .eq(
+                  'id',
+                  renterId,
+                )
+                .maybeSingle();
 
-            booking['renter_profile'] =
-                renter;
+            if (renterJson != null) {
+              renterProfiles[renterId] =
+                  ProfileModel.fromJson(
+                Map<String, dynamic>.from(
+                  renterJson,
+                ),
+              );
+            }
           }
         }
       }
 
+      // =========================
+      // EARNINGS
+      // =========================
+
       earnings = 0;
 
       for (final booking in bookings) {
-        final status = booking['status']
-            ?.toString()
-            .toLowerCase();
+        final status =
+            booking.status.toLowerCase();
 
         if (status == 'confirmed' ||
             status == 'completed') {
-          earnings +=
-              double.tryParse(
-                    booking['total_price']
-                            ?.toString() ??
-                        '0',
-                  ) ??
-                  0;
+          earnings += booking.totalPrice ?? 0;
         }
       }
 
@@ -254,9 +276,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   int get pendingBookings {
     return bookings.where(
       (booking) {
-        return booking['status']
-                ?.toString()
-                .toLowerCase() ==
+        return booking.status.toLowerCase() ==
             'pending';
       },
     ).length;
@@ -265,9 +285,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   int get confirmedBookings {
     return bookings.where(
       (booking) {
-        return booking['status']
-                ?.toString()
-                .toLowerCase() ==
+        return booking.status.toLowerCase() ==
             'confirmed';
       },
     ).length;
@@ -287,8 +305,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     if (value == null) return '-';
 
     try {
-      final date =
-          DateTime.parse(
+      final date = DateTime.parse(
         value.toString(),
       );
 
@@ -330,6 +347,25 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       default:
         return '✨';
     }
+  }
+
+  SpaceModel? getSpaceForBooking(
+    BookingModel booking,
+  ) {
+    try {
+      return spaces.firstWhere(
+        (space) =>
+            space.id == booking.spaceId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  ProfileModel? getRenterForBooking(
+    BookingModel booking,
+  ) {
+    return renterProfiles[booking.renterId];
   }
 
   @override
@@ -737,6 +773,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
+  // ============================================================
+  // OVERVIEW
+  // ============================================================
+
   Widget _statsGrid() {
     return GridView.count(
       crossAxisCount: 2,
@@ -779,6 +819,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     );
   }
 
+  // ============================================================
+  // BEAUTIFIED STAT CARD
+  // ============================================================
+
   Widget _statCard(
     IconData icon,
     String title,
@@ -787,24 +831,26 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     Color iconBg,
   ) {
     return Container(
-      padding:
-          const EdgeInsets.all(16),
-      decoration:
-          BoxDecoration(
-        color: softCream,
-        borderRadius:
-            BorderRadius.circular(24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(
-          color:
-              beige.withOpacity(.75),
+          color: const Color(0xFFE9DED2),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color:
-                brown.withOpacity(.055),
-            blurRadius: 18,
-            offset:
-                const Offset(0, 7),
+            color: brown.withOpacity(.09),
+            blurRadius: 24,
+            spreadRadius: 0,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Colors.white.withOpacity(.80),
+            blurRadius: 8,
+            spreadRadius: -2,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
@@ -815,60 +861,93 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           Row(
             children: [
               Container(
-                height: 37,
-                width: 37,
-                decoration:
-                    BoxDecoration(
-                  color: iconBg,
+                width: 43,
+                height: 43,
+                decoration: BoxDecoration(
+                  color: iconBg.withOpacity(.52),
                   borderRadius:
-                      BorderRadius.circular(
-                    13,
+                      BorderRadius.circular(15),
+                  border: Border.all(
+                    color: Colors.white
+                        .withOpacity(.85),
+                    width: 1,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          brown.withOpacity(.07),
+                      blurRadius: 9,
+                      offset:
+                          const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Icon(
                   icon,
                   color: darkBrown,
-                  size: 20,
+                  size: 21,
                 ),
               ),
+
               const Spacer(),
-              Icon(
-                Icons.arrow_outward_rounded,
-                size: 15,
-                color:
-                    brown.withOpacity(.35),
+
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EBE2),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  Icons.arrow_outward_rounded,
+                  size: 14,
+                  color: brown.withOpacity(.62),
+                ),
               ),
             ],
           ),
+
           const Spacer(),
+
           Text(
             value,
             maxLines: 1,
-            overflow:
-                TextOverflow.ellipsis,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: darkBrown,
-              fontSize: 21,
-              fontWeight:
-                  FontWeight.bold,
+              fontSize: 23,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Georgia',
+              letterSpacing: -.3,
             ),
           ),
-          const SizedBox(height: 2),
+
+          const SizedBox(height: 4),
+
           Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: brown,
-              fontWeight:
-                  FontWeight.w600,
-              fontSize: 11,
+              color: darkBrown.withOpacity(.88),
+              fontWeight: FontWeight.w600,
+              fontSize: 11.5,
             ),
           ),
+
+          const SizedBox(height: 3),
+
           Text(
             subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color:
-                  brown.withOpacity(.45),
-              fontSize: 9,
+              color: brown.withOpacity(.50),
+              fontSize: 9.5,
             ),
           ),
         ],
@@ -890,13 +969,14 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       child: ListView.separated(
         scrollDirection:
             Axis.horizontal,
-        itemCount:
-            spaces.length > 5
-                ? 5
-                : spaces.length,
+
+        // All owner spaces
+        itemCount: spaces.length,
+
         separatorBuilder:
             (_, __) =>
                 const SizedBox(width: 13),
+
         itemBuilder:
             (context, index) {
           return _spaceCard(
@@ -908,27 +988,20 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   }
 
   Widget _spaceCard(
-    Map<String, dynamic> space,
+    SpaceModel space,
   ) {
-    final title =
-        space['title']?.toString() ??
-            'Untitled Space';
+    final title = space.title.isNotEmpty
+        ? space.title
+        : 'Untitled Space';
 
-    final type =
-        space['type']?.toString() ??
-            'Other';
-
-    final images =
-        space['space_images'];
+    final type = space.type.isNotEmpty
+        ? space.type
+        : 'Other';
 
     String imageUrl = '';
 
-    if (images is List &&
-        images.isNotEmpty) {
-      imageUrl =
-          images.first['image_url']
-                  ?.toString() ??
-              '';
+    if (space.imageUrls.isNotEmpty) {
+      imageUrl = space.imageUrls.first;
     }
 
     return Container(
@@ -942,6 +1015,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           color:
               beige.withOpacity(.7),
         ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                brown.withOpacity(.06),
+            blurRadius: 15,
+            offset:
+                const Offset(0, 6),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius:
@@ -999,7 +1081,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '${formatPrice(space['daily_price'])} / day',
+                    '${formatPrice(space.dailyPrice)} / day',
                     style: TextStyle(
                       color: darkBrown,
                       fontWeight:
@@ -1045,28 +1127,28 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   }
 
   Widget _bookingCard(
-    Map<String, dynamic> booking,
+    BookingModel booking,
   ) {
     final space =
-        booking['spaces'];
+        getSpaceForBooking(booking);
 
     final renter =
-        booking['renter_profile'];
+        getRenterForBooking(booking);
 
-    final title =
-        space?['title']
-                ?.toString() ??
-            'Space';
+    final title = space != null &&
+            space.title.isNotEmpty
+        ? space.title
+        : 'Space';
 
     final renterName =
-        renter?['full_name']
-                ?.toString() ??
-            'Renter';
+        renter != null &&
+                renter.fullName.isNotEmpty
+            ? renter.fullName
+            : 'Renter';
 
-    final status =
-        booking['status']
-                ?.toString() ??
-            'pending';
+    final status = booking.status.isNotEmpty
+        ? booking.status
+        : 'pending';
 
     return Container(
       padding:
@@ -1080,6 +1162,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           color:
               beige.withOpacity(.8),
         ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                brown.withOpacity(.05),
+            blurRadius: 14,
+            offset:
+                const Offset(0, 5),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -1129,9 +1220,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${formatDate(booking['start_date'])}'
+                  '${formatDate(booking.startDate)}'
                   ' → '
-                  '${formatDate(booking['end_date'])}',
+                  '${formatDate(booking.endDate)}',
                   style: TextStyle(
                     color:
                         brown.withOpacity(.5),
@@ -1148,7 +1239,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             children: [
               Text(
                 formatPrice(
-                  booking['total_price'],
+                  booking.totalPrice,
                 ),
                 style: TextStyle(
                   color: darkBrown,
@@ -1200,9 +1291,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               'Everything you currently have listed.',
               Icons.home_work_outlined,
             ),
-
             const SizedBox(height: 20),
-
             if (spaces.isEmpty)
               _emptyCard(
                 Icons.add_home_work_outlined,
@@ -1222,9 +1311,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   );
                 },
               ),
-
             const SizedBox(height: 10),
-
             GestureDetector(
               onTap: () async {
                 final result =
@@ -1310,7 +1397,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 ),
               ),
             ),
-
             const SizedBox(height: 10),
           ],
         ),
@@ -1319,34 +1405,24 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   }
 
   Widget _largeSpaceCard(
-    Map<String, dynamic> space,
+    SpaceModel space,
   ) {
-    final title =
-        space['title']?.toString() ??
-            'Untitled';
+    final title = space.title.isNotEmpty
+        ? space.title
+        : 'Untitled';
 
-    final type =
-        space['type']?.toString() ??
-            'Other';
+    final type = space.type.isNotEmpty
+        ? space.type
+        : 'Other';
 
-    final address =
-        space['address']?.toString() ??
-            '';
+    final address = space.address;
 
-    final verified =
-        space['verified'] == true;
-
-    final images =
-        space['space_images'];
+    final verified = space.verified;
 
     String imageUrl = '';
 
-    if (images is List &&
-        images.isNotEmpty) {
-      imageUrl =
-          images.first['image_url']
-                  ?.toString() ??
-              '';
+    if (space.imageUrls.isNotEmpty) {
+      imageUrl = space.imageUrls.first;
     }
 
     return Container(
@@ -1360,6 +1436,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           color:
               beige.withOpacity(.8),
         ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                brown.withOpacity(.05),
+            blurRadius: 15,
+            offset:
+                const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -1451,7 +1536,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   ],
                   const Spacer(),
                   Text(
-                    '${formatPrice(space['daily_price'])} / day',
+                    '${formatPrice(space.dailyPrice)} / day',
                     style: TextStyle(
                       color: darkBrown,
                       fontWeight:
@@ -1467,6 +1552,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       ),
     );
   }
+
   Widget _bookingsPage() {
     return RefreshIndicator(
       color: darkBrown,
@@ -1493,9 +1579,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               'Live activity from your spaces.',
               Icons.calendar_month_outlined,
             ),
-
             const SizedBox(height: 18),
-
             Container(
               width: double.infinity,
               padding:
@@ -1535,9 +1619,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 ],
               ),
             ),
-
             const SizedBox(height: 18),
-
             if (bookings.isEmpty)
               _emptyCard(
                 Icons.event_busy_outlined,
@@ -1566,38 +1648,34 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   }
 
   Widget _fullBookingCard(
-    Map<String, dynamic> booking,
+    BookingModel booking,
   ) {
     final space =
-        booking['spaces'];
+        getSpaceForBooking(booking);
 
     final renter =
-        booking['renter_profile'];
+        getRenterForBooking(booking);
 
-    final title =
-        space?['title']
-                ?.toString() ??
-            'Space';
+    final title = space != null &&
+            space.title.isNotEmpty
+        ? space.title
+        : 'Space';
 
     final address =
-        space?['address']
-                ?.toString() ??
-            '';
+        space?.address ?? '';
 
     final renterName =
-        renter?['full_name']
-                ?.toString() ??
-            'Renter';
+        renter != null &&
+                renter.fullName.isNotEmpty
+            ? renter.fullName
+            : 'Renter';
 
     final renterEmail =
-        renter?['email']
-                ?.toString() ??
-            '';
+        renter?.email ?? '';
 
-    final status =
-        booking['status']
-                ?.toString() ??
-            'pending';
+    final status = booking.status.isNotEmpty
+        ? booking.status
+        : 'pending';
 
     return Container(
       padding:
@@ -1611,6 +1689,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           color:
               beige.withOpacity(.8),
         ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                brown.withOpacity(.05),
+            blurRadius: 16,
+            offset:
+                const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment:
@@ -1636,9 +1723,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   color: darkBrown,
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment:
@@ -1668,7 +1753,6 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   ],
                 ),
               ),
-
               Text(
                 status.toUpperCase(),
                 style: TextStyle(
@@ -1680,16 +1764,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               ),
             ],
           ),
-
           const SizedBox(height: 15),
-
           Divider(
             color:
                 beige.withOpacity(.7),
           ),
-
           const SizedBox(height: 12),
-
           Row(
             children: [
               Icon(
@@ -1697,9 +1777,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                 color: brown,
                 size: 18,
               ),
-
               const SizedBox(width: 8),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment:
@@ -1726,10 +1804,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   ],
                 ),
               ),
-
               Text(
                 formatPrice(
-                  booking['total_price'],
+                  booking.totalPrice,
                 ),
                 style: TextStyle(
                   color: darkBrown,
@@ -1740,9 +1817,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           Row(
             children: [
               Expanded(
@@ -1750,7 +1825,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   Icons.login_rounded,
                   'Start',
                   formatDate(
-                    booking['start_date'],
+                    booking.startDate,
                   ),
                 ),
               ),
@@ -1759,7 +1834,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   Icons.logout_rounded,
                   'End',
                   formatDate(
-                    booking['end_date'],
+                    booking.endDate,
                   ),
                 ),
               ),
@@ -1833,9 +1908,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             size: 23,
           ),
         ),
-
         const SizedBox(width: 13),
-
         Expanded(
           child: Column(
             crossAxisAlignment:
@@ -1890,6 +1963,15 @@ class _OwnerHomePageState extends State<OwnerHomePage>
           color:
               beige.withOpacity(.8),
         ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                brown.withOpacity(.04),
+            blurRadius: 14,
+            offset:
+                const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -1908,9 +1990,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               size: 26,
             ),
           ),
-
           const SizedBox(height: 13),
-
           Text(
             title,
             style: TextStyle(
@@ -1920,9 +2000,7 @@ class _OwnerHomePageState extends State<OwnerHomePage>
               fontSize: 15,
             ),
           ),
-
           const SizedBox(height: 5),
-
           Text(
             subtitle,
             textAlign:

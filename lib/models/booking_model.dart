@@ -2,69 +2,60 @@ class BookingModel {
   final String id;
   final String spaceId;
   final String renterId;
-  final DateTime? startDate;
-  final DateTime? endDate;
+  final DateTime startDate;
+  final DateTime endDate;
   final String rentalType;
-  final int? totalDays;
+  final int totalDays;
   final double? pricePerDay;
   final double? pricePerMonth;
   final double? serviceFee;
   final double? totalPrice;
   final String status;
+  final DateTime? createdAt;
 
   BookingModel({
     required this.id,
     required this.spaceId,
     required this.renterId,
-    this.startDate,
-    this.endDate,
+    required this.startDate,
+    required this.endDate,
     required this.rentalType,
-    this.totalDays,
+    required this.totalDays,
     this.pricePerDay,
     this.pricePerMonth,
     this.serviceFee,
     this.totalPrice,
     required this.status,
+    this.createdAt,
   });
 
-  factory BookingModel.fromMap(Map<String, dynamic> map) {
+  factory BookingModel.fromJson(Map<String, dynamic> json) {
     return BookingModel(
-      id: map['id']?.toString() ?? '',
-      spaceId: map['space_id']?.toString() ?? '',
-      renterId: map['renter_id']?.toString() ?? '',
-      startDate: map['start_date'] == null
-          ? null
-          : DateTime.tryParse(map['start_date'].toString()),
-      endDate: map['end_date'] == null
-          ? null
-          : DateTime.tryParse(map['end_date'].toString()),
-      rentalType: map['rental_type']?.toString() ?? '',
-      totalDays: map['total_days'] == null
-          ? null
-          : int.tryParse(map['total_days'].toString()),
-      pricePerDay: map['price_per_day'] == null
-          ? null
-          : double.tryParse(map['price_per_day'].toString()),
-      pricePerMonth: map['price_per_month'] == null
-          ? null
-          : double.tryParse(map['price_per_month'].toString()),
-      serviceFee: map['service_fee'] == null
-          ? null
-          : double.tryParse(map['service_fee'].toString()),
-      totalPrice: map['total_price'] == null
-          ? null
-          : double.tryParse(map['total_price'].toString()),
-      status: map['status']?.toString() ?? '',
+      id: json['id']?.toString() ?? '',
+      spaceId: json['space_id']?.toString() ?? '',
+      renterId: json['renter_id']?.toString() ?? '',
+      startDate: DateTime.parse(json['start_date'].toString()),
+      endDate: DateTime.parse(json['end_date'].toString()),
+      rentalType: json['rental_type']?.toString() ?? '',
+      totalDays: (json['total_days'] as num?)?.toInt() ?? 0,
+      pricePerDay: (json['price_per_day'] as num?)?.toDouble(),
+      pricePerMonth: (json['price_per_month'] as num?)?.toDouble(),
+      serviceFee: (json['service_fee'] as num?)?.toDouble(),
+      totalPrice: (json['total_price'] as num?)?.toDouble(),
+      status: json['status']?.toString() ?? '',
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'id': id,
       'space_id': spaceId,
       'renter_id': renterId,
-      'start_date': startDate?.toIso8601String(),
-      'end_date': endDate?.toIso8601String(),
+      'start_date': startDate.toIso8601String().split('T').first,
+      'end_date': endDate.toIso8601String().split('T').first,
       'rental_type': rentalType,
       'total_days': totalDays,
       'price_per_day': pricePerDay,
@@ -72,6 +63,7 @@ class BookingModel {
       'service_fee': serviceFee,
       'total_price': totalPrice,
       'status': status,
+      'created_at': createdAt?.toIso8601String(),
     };
   }
 }

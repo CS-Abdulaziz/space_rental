@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/space_model.dart';
 import 'add_space.dart';
 
 class MySpacesPage extends StatefulWidget {
@@ -13,7 +14,7 @@ class MySpacesPage extends StatefulWidget {
 class _MySpacesPageState extends State<MySpacesPage> {
   final supabase = Supabase.instance.client;
 
-  List<Map<String, dynamic>> spaces = [];
+  List<SpaceModel> spaces = [];
   bool loading = true;
 
   static const cream = Color(0xffFBF8F3);
@@ -40,11 +41,25 @@ class _MySpacesPageState extends State<MySpacesPage> {
           .from('spaces')
           .select('*, space_images(image_url)')
           .eq('owner_id', user.id)
-          .order('created_at', ascending: false);
+          .order(
+            'created_at',
+            ascending: false,
+          );
+
+      final List<SpaceModel> loadedSpaces = [];
+
+      for (final item in result) {
+        final json =
+            Map<String, dynamic>.from(item);
+
+        loadedSpaces.add(
+          SpaceModel.fromJson(json),
+        );
+      }
 
       if (mounted) {
         setState(() {
-          spaces = List<Map<String, dynamic>>.from(result);
+          spaces = loadedSpaces;
           loading = false;
         });
       }
@@ -61,7 +76,8 @@ class _MySpacesPageState extends State<MySpacesPage> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const AddSpacePage(),
+        builder: (context) =>
+            const AddSpacePage(),
       ),
     );
 
@@ -98,12 +114,18 @@ class _MySpacesPageState extends State<MySpacesPage> {
 
   Future<void> deleteSpace(String id) async {
     try {
-      await supabase.from('spaces').delete().eq('id', id);
+      await supabase
+          .from('spaces')
+          .delete()
+          .eq('id', id);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           const SnackBar(
-            content: Text('Space deleted successfully'),
+            content: Text(
+              'Space deleted successfully',
+            ),
             backgroundColor: brown,
           ),
         );
@@ -112,7 +134,8 @@ class _MySpacesPageState extends State<MySpacesPage> {
       loadSpaces();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
           ),
@@ -128,18 +151,22 @@ class _MySpacesPageState extends State<MySpacesPage> {
       body: SafeArea(
         child: loading
             ? const Center(
-                child: CircularProgressIndicator(
+                child:
+                    CircularProgressIndicator(
                   color: brown,
                 ),
               )
             : Column(
                 children: [
                   Expanded(
-                    child: RefreshIndicator(
+                    child:
+                        RefreshIndicator(
                       color: brown,
                       onRefresh: loadSpaces,
                       child: ListView(
-                        padding: const EdgeInsets.fromLTRB(
+                        padding:
+                            const EdgeInsets
+                                .fromLTRB(
                           20,
                           18,
                           20,
@@ -152,37 +179,60 @@ class _MySpacesPageState extends State<MySpacesPage> {
                               Container(
                                 width: 70,
                                 height: 70,
-                                decoration: BoxDecoration(
+                                decoration:
+                                    BoxDecoration(
                                   color: brown,
-                                  borderRadius: BorderRadius.circular(22),
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    22,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.home_work_outlined,
-                                  color: Colors.white,
+                                child:
+                                    const Icon(
+                                  Icons
+                                      .home_work_outlined,
+                                  color:
+                                      Colors.white,
                                   size: 35,
                                 ),
                               ),
-                              const SizedBox(width: 16),
+                              const SizedBox(
+                                  width: 16),
                               const Expanded(
                                 child: Column(
                                   crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                      CrossAxisAlignment
+                                          .start,
                                   children: [
                                     Text(
                                       'My Spaces',
-                                      style: TextStyle(
-                                        fontSize: 30,
-                                        fontWeight: FontWeight.w700,
-                                        fontStyle: FontStyle.italic,
-                                        color: darkBrown,
+                                      style:
+                                          TextStyle(
+                                        fontSize:
+                                            30,
+                                        fontWeight:
+                                            FontWeight
+                                                .w700,
+                                        fontStyle:
+                                            FontStyle
+                                                .italic,
+                                        color:
+                                            darkBrown,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
+                                    SizedBox(
+                                        height: 4),
                                     Text(
                                       'Everything you currently have listed.',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Color(0xff8A7A6C),
+                                      style:
+                                          TextStyle(
+                                        fontSize:
+                                            14,
+                                        color:
+                                            Color(
+                                          0xff8A7A6C,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -191,37 +241,61 @@ class _MySpacesPageState extends State<MySpacesPage> {
                             ],
                           ),
 
-                          const SizedBox(height: 25),
+                          const SizedBox(
+                              height: 25),
 
                           if (spaces.isEmpty)
                             Container(
-                              padding: const EdgeInsets.all(30),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(25),
+                              padding:
+                                  const EdgeInsets
+                                      .all(30),
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    Colors.white,
+                                borderRadius:
+                                    BorderRadius
+                                        .circular(
+                                  25,
+                                ),
                               ),
-                              child: const Column(
+                              child:
+                                  const Column(
                                 children: [
                                   Icon(
-                                    Icons.home_work_outlined,
+                                    Icons
+                                        .home_work_outlined,
                                     size: 55,
                                     color: brown,
                                   ),
-                                  SizedBox(height: 15),
+                                  SizedBox(
+                                      height: 15),
                                   Text(
                                     'No spaces yet',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: darkBrown,
+                                    style:
+                                        TextStyle(
+                                      fontSize:
+                                          20,
+                                      fontWeight:
+                                          FontWeight
+                                              .bold,
+                                      color:
+                                          darkBrown,
                                     ),
                                   ),
-                                  SizedBox(height: 6),
+                                  SizedBox(
+                                      height: 6),
                                   Text(
                                     'Add your first space and start earning.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Color(0xff8A7A6C),
+                                    textAlign:
+                                        TextAlign
+                                            .center,
+                                    style:
+                                        TextStyle(
+                                      color:
+                                          Color(
+                                        0xff8A7A6C,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -229,286 +303,391 @@ class _MySpacesPageState extends State<MySpacesPage> {
                             ),
 
                           // SPACE CARDS
-                          ...spaces.map((space) {
-                            final title =
-                                space['title'] ?? 'Untitled Space';
+                          ...spaces.map(
+                            (space) {
+                              final title =
+                                  space.title
+                                          .isNotEmpty
+                                      ? space.title
+                                      : 'Untitled Space';
 
-                            final type =
-                                space['type'] ?? 'Other';
+                              final type =
+                                  space.type
+                                          .isNotEmpty
+                                      ? space.type
+                                      : 'Other';
 
-                            final address =
-                                space['address'] ?? 'Riyadh';
+                              final address =
+                                  space.address
+                                          .isNotEmpty
+                                      ? space.address
+                                      : 'Riyadh';
 
-                            final price =
-                                space['daily_price'] ?? 0;
+                              final price =
+                                  space.dailyPrice ??
+                                      0;
 
-                            final status =
-                                space['status'] ?? 'active';
+                              final status =
+                                  space.status
+                                          .isNotEmpty
+                                      ? space.status
+                                      : 'active';
 
-                            String? imageUrl;
+                              String? imageUrl;
 
-                            final images = space['space_images'];
+                              if (space
+                                  .imageUrls
+                                  .isNotEmpty) {
+                                imageUrl =
+                                    space.imageUrls
+                                        .first;
+                              }
 
-                            if (images is List && images.isNotEmpty) {
-                              imageUrl =
-                                  images.first['image_url'];
-                            }
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 18),
-                              height: 185,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius:
-                                    BorderRadius.circular(28),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black
-                                        .withOpacity(0.04),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 5),
+                              return Container(
+                                margin:
+                                    const EdgeInsets
+                                        .only(
+                                  bottom: 18,
+                                ),
+                                height: 185,
+                                decoration:
+                                    BoxDecoration(
+                                  color:
+                                      Colors.white,
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    28,
                                   ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius:
-                                        const BorderRadius.only(
-                                      topLeft:
-                                          Radius.circular(28),
-                                      bottomLeft:
-                                          Radius.circular(28),
-                                    ),
-                                    child: SizedBox(
-                                      width: 125,
-                                      height: double.infinity,
-                                      child: imageUrl != null &&
-                                              imageUrl
-                                                  .isNotEmpty
-                                          ? Image.network(
-                                              imageUrl,
-                                              fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (_, __, ___) {
-                                                return Image.asset(
-                                                  fallbackImage(
-                                                      type),
-                                                  fit: BoxFit.cover,
-                                                );
-                                              },
-                                            )
-                                          : Image.asset(
-                                              fallbackImage(type),
-                                              fit: BoxFit.cover,
-                                            ),
-                                    ),
-                                  ),
-
-                                  Expanded(
-                                    child: Padding(
-                                      padding:
-                                          const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  title,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow
-                                                          .ellipsis,
-                                                  style:
-                                                      const TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight:
-                                                        FontWeight
-                                                            .bold,
-                                                    color:
-                                                        darkBrown,
-                                                  ),
-                                                ),
-                                              ),
-                                              const Icon(
-                                                Icons
-                                                    .verified_rounded,
-                                                color: brown,
-                                                size: 22,
-                                              ),
-                                            ],
-                                          ),
-
-                                          const SizedBox(height: 7),
-
-                                          Row(
-                                            children: [
-                                              Text(
-                                                type,
-                                                style:
-                                                    const TextStyle(
-                                                  color: brown,
-                                                  fontWeight:
-                                                      FontWeight
-                                                          .w600,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 7),
-                                              const Text('•'),
-                                              const SizedBox(width: 7),
-                                              Icon(
-                                                typeIcon(type),
-                                                size: 17,
-                                                color: brown,
-                                              ),
-                                            ],
-                                          ),
-
-                                          const SizedBox(height: 8),
-
-                                          Text(
-                                            address,
-                                            maxLines: 1,
-                                            overflow:
-                                                TextOverflow.ellipsis,
-                                            style:
-                                                const TextStyle(
-                                              color:
-                                                  Color(0xff8A7A6C),
-                                              fontSize: 13,
-                                            ),
-                                          ),
-
-                                          const Spacer(),
-
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment
-                                                    .spaceBetween,
-                                            children: [
-                                              RichText(
-                                                text: TextSpan(
-                                                  children: [
-                                                    TextSpan(
-                                                      text:
-                                                          '$price SAR',
-                                                      style:
-                                                          const TextStyle(
-                                                        color:
-                                                            darkBrown,
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight
-                                                                .bold,
-                                                      ),
-                                                    ),
-                                                    const TextSpan(
-                                                      text: ' / day',
-                                                      style:
-                                                          TextStyle(
-                                                        color:
-                                                            Color(
-                                                                0xff8A7A6C),
-                                                        fontSize: 13,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets
-                                                        .symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 7,
-                                                ),
-                                                decoration:
-                                                    BoxDecoration(
-                                                  color: lightBrown,
-                                                  borderRadius:
-                                                      BorderRadius
-                                                          .circular(
-                                                              20),
-                                                ),
-                                                child: Text(
-                                                  status,
-                                                  style:
-                                                      const TextStyle(
-                                                    color: darkBrown,
-                                                    fontSize: 12,
-                                                    fontWeight:
-                                                        FontWeight
-                                                            .w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors
+                                          .black
+                                          .withOpacity(
+                                              0.04),
+                                      blurRadius:
+                                          12,
+                                      offset:
+                                          const Offset(
+                                        0,
+                                        5,
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius:
+                                          const BorderRadius
+                                              .only(
+                                        topLeft:
+                                            Radius.circular(
+                                          28,
+                                        ),
+                                        bottomLeft:
+                                            Radius.circular(
+                                          28,
+                                        ),
+                                      ),
+                                      child:
+                                          SizedBox(
+                                        width: 125,
+                                        height:
+                                            double
+                                                .infinity,
+                                        child: imageUrl !=
+                                                    null &&
+                                                imageUrl
+                                                    .isNotEmpty
+                                            ? Image
+                                                .network(
+                                                imageUrl,
+                                                fit: BoxFit
+                                                    .cover,
+                                                errorBuilder:
+                                                    (_, __, ___) {
+                                                  return Image
+                                                      .asset(
+                                                    fallbackImage(
+                                                        type),
+                                                    fit: BoxFit
+                                                        .cover,
+                                                  );
+                                                },
+                                              )
+                                            : Image
+                                                .asset(
+                                                fallbackImage(
+                                                    type),
+                                                fit: BoxFit
+                                                    .cover,
+                                              ),
+                                      ),
+                                    ),
 
-                          const SizedBox(height: 5),
+                                    Expanded(
+                                      child:
+                                          Padding(
+                                        padding:
+                                            const EdgeInsets
+                                                .all(
+                                          16,
+                                        ),
+                                        child:
+                                            Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment
+                                                  .start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child:
+                                                      Text(
+                                                    title,
+                                                    maxLines:
+                                                        1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style:
+                                                        const TextStyle(
+                                                      fontSize:
+                                                          18,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color:
+                                                          darkBrown,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const Icon(
+                                                  Icons
+                                                      .verified_rounded,
+                                                  color:
+                                                      brown,
+                                                  size:
+                                                      22,
+                                                ),
+                                              ],
+                                            ),
+
+                                            const SizedBox(
+                                                height:
+                                                    7),
+
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  type,
+                                                  style:
+                                                      const TextStyle(
+                                                    color:
+                                                        brown,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                  ),
+                                                ),
+                                                const SizedBox(
+                                                    width:
+                                                        7),
+                                                const Text(
+                                                    '•'),
+                                                const SizedBox(
+                                                    width:
+                                                        7),
+                                                Icon(
+                                                  typeIcon(
+                                                      type),
+                                                  size:
+                                                      17,
+                                                  color:
+                                                      brown,
+                                                ),
+                                              ],
+                                            ),
+
+                                            const SizedBox(
+                                                height:
+                                                    8),
+
+                                            Text(
+                                              address,
+                                              maxLines:
+                                                  1,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
+                                              style:
+                                                  const TextStyle(
+                                                color:
+                                                    Color(
+                                                  0xff8A7A6C,
+                                                ),
+                                                fontSize:
+                                                    13,
+                                              ),
+                                            ),
+
+                                            const Spacer(),
+
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                RichText(
+                                                  text:
+                                                      TextSpan(
+                                                    children: [
+                                                      TextSpan(
+                                                        text:
+                                                            '${price.toStringAsFixed(0)} SAR',
+                                                        style:
+                                                            const TextStyle(
+                                                          color:
+                                                              darkBrown,
+                                                          fontSize:
+                                                              18,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      const TextSpan(
+                                                        text:
+                                                            ' / day',
+                                                        style:
+                                                            TextStyle(
+                                                          color:
+                                                              Color(
+                                                            0xff8A7A6C,
+                                                          ),
+                                                          fontSize:
+                                                              13,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal:
+                                                        12,
+                                                    vertical:
+                                                        7,
+                                                  ),
+                                                  decoration:
+                                                      BoxDecoration(
+                                                    color:
+                                                        lightBrown,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      20,
+                                                    ),
+                                                  ),
+                                                  child:
+                                                      Text(
+                                                    status,
+                                                    style:
+                                                        const TextStyle(
+                                                      color:
+                                                          darkBrown,
+                                                      fontSize:
+                                                          12,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          const SizedBox(
+                              height: 5),
 
                           // ADD SPACE BUTTON
                           GestureDetector(
-                            onTap: openAddSpace,
+                            onTap:
+                                openAddSpace,
                             child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
+                              width:
+                                  double.infinity,
+                              padding:
+                                  const EdgeInsets
+                                      .symmetric(
                                 horizontal: 24,
                                 vertical: 20,
                               ),
-                              decoration: BoxDecoration(
+                              decoration:
+                                  BoxDecoration(
                                 color: brown,
                                 borderRadius:
-                                    BorderRadius.circular(25),
+                                    BorderRadius
+                                        .circular(
+                                  25,
+                                ),
                               ),
                               child: const Row(
                                 children: [
                                   Icon(
-                                    Icons.add_rounded,
-                                    color: Colors.white,
+                                    Icons
+                                        .add_rounded,
+                                    color: Colors
+                                        .white,
                                     size: 32,
                                   ),
-                                  SizedBox(width: 15),
+                                  SizedBox(
+                                      width: 15),
                                   Expanded(
-                                    child: Column(
+                                    child:
+                                        Column(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          CrossAxisAlignment
+                                              .start,
                                       children: [
                                         Text(
                                           'Add New Space',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 20,
+                                          style:
+                                              TextStyle(
+                                            color:
+                                                Colors.white,
+                                            fontSize:
+                                                20,
                                             fontWeight:
                                                 FontWeight.bold,
                                           ),
                                         ),
-                                        SizedBox(height: 4),
+                                        SizedBox(
+                                            height:
+                                                4),
                                         Text(
                                           'List a new space and start earning',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 13,
+                                          style:
+                                              TextStyle(
+                                            color:
+                                                Colors.white70,
+                                            fontSize:
+                                                13,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   Icon(
-                                    Icons.arrow_forward_ios_rounded,
-                                    color: Colors.white,
+                                    Icons
+                                        .arrow_forward_ios_rounded,
+                                    color:
+                                        Colors.white,
                                     size: 20,
                                   ),
                                 ],
@@ -516,7 +695,8 @@ class _MySpacesPageState extends State<MySpacesPage> {
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          const SizedBox(
+                              height: 10),
                         ],
                       ),
                     ),

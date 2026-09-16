@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/profile_model.dart';
+import '../../models/verification_model.dart';
+import '../../models/space_model.dart';
+
 class AddSpacePage extends StatefulWidget {
   const AddSpacePage({super.key});
 
@@ -23,8 +27,8 @@ class _AddSpacePageState extends State<AddSpacePage> {
   bool loadingVerification = true;
   bool saving = false;
 
-  Map<String, dynamic>? profile;
-  Map<String, dynamic>? verification;
+  ProfileModel? profile;
+  VerificationModel? verification;
 
   static const cream = Color(0xffFBF8F3);
   static const brown = Color(0xff765640);
@@ -46,42 +50,71 @@ class _AddSpacePageState extends State<AddSpacePage> {
     }
 
     try {
+      // =========================
+      // PROFILE MODEL
+      // =========================
+
       final profileData = await supabase
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
+      // =========================
+      // VERIFICATION MODEL
+      // =========================
+
       final verificationData = await supabase
           .from('verification')
           .select()
           .eq('owner_id', user.id)
-          .order('submitted_at', ascending: false)
+          .order(
+            'submitted_at',
+            ascending: false,
+          )
           .limit(1);
+
+      ProfileModel? profileModel;
+      VerificationModel? verificationModel;
+
+      if (profileData != null) {
+        profileModel = ProfileModel.fromJson(
+          Map<String, dynamic>.from(profileData),
+        );
+      }
+
+      if (verificationData.isNotEmpty) {
+        verificationModel =
+            VerificationModel.fromJson(
+          Map<String, dynamic>.from(
+            verificationData.first,
+          ),
+        );
+      }
 
       if (mounted) {
         setState(() {
-          profile = profileData;
-
-          if (verificationData.isNotEmpty) {
-            verification = verificationData.first;
-          }
-
+          profile = profileModel;
+          verification = verificationModel;
           loadingVerification = false;
         });
       }
     } catch (e) {
-      debugPrint('Verification loading error: $e');
+      debugPrint(
+        'Verification loading error: $e',
+      );
 
       if (mounted) {
-        setState(() => loadingVerification = false);
+        setState(
+          () => loadingVerification = false,
+        );
       }
     }
   }
 
   bool get isVerified {
     final status =
-        verification?['status']?.toString().toLowerCase();
+        verification?.status.toLowerCase();
 
     return status == 'approved';
   }
@@ -92,10 +125,12 @@ class _AddSpacePageState extends State<AddSpacePage> {
       filled: true,
       fillColor: fieldColor,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius:
+            BorderRadius.circular(15),
         borderSide: BorderSide.none,
       ),
-      contentPadding: const EdgeInsets.symmetric(
+      contentPadding:
+          const EdgeInsets.symmetric(
         horizontal: 16,
         vertical: 15,
       ),
@@ -110,15 +145,18 @@ class _AddSpacePageState extends State<AddSpacePage> {
     TextInputType? keyboardType,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 17),
+      padding:
+          const EdgeInsets.only(bottom: 17),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: const TextStyle(
               color: darkBrown,
-              fontWeight: FontWeight.w600,
+              fontWeight:
+                  FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -139,7 +177,8 @@ class _AddSpacePageState extends State<AddSpacePage> {
     if (user == null) return;
 
     if (!isVerified) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
           content: Text(
             'Your owner verification must be approved first.',
@@ -151,14 +190,25 @@ class _AddSpacePageState extends State<AddSpacePage> {
     }
 
     if (titleController.text.trim().isEmpty ||
-        descriptionController.text.trim().isEmpty ||
-        addressController.text.trim().isEmpty ||
+        descriptionController.text
+            .trim()
+            .isEmpty ||
+        addressController.text
+            .trim()
+            .isEmpty ||
         sizeController.text.trim().isEmpty ||
-        dailyPriceController.text.trim().isEmpty ||
-        monthlyPriceController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+        dailyPriceController.text
+            .trim()
+            .isEmpty ||
+        monthlyPriceController.text
+            .trim()
+            .isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content: Text('Please complete all space details.'),
+          content: Text(
+            'Please complete all space details.',
+          ),
           backgroundColor: brown,
         ),
       );
@@ -168,14 +218,22 @@ class _AddSpacePageState extends State<AddSpacePage> {
     setState(() => saving = true);
 
     try {
-      final space = await supabase
+      // =========================
+      // CREATE SPACE
+      // =========================
+
+      final spaceData = await supabase
           .from('spaces')
           .insert({
             'owner_id': user.id,
-            'title': titleController.text.trim(),
+            'title':
+                titleController.text.trim(),
             'type': selectedType,
-            'description': descriptionController.text.trim(),
-            'address': addressController.text.trim(),
+            'description':
+                descriptionController.text
+                    .trim(),
+            'address':
+                addressController.text.trim(),
             'latitude': 24.7136,
             'longitude': 46.6753,
             'size': double.tryParse(
@@ -183,11 +241,13 @@ class _AddSpacePageState extends State<AddSpacePage> {
                 ) ??
                 0,
             'daily_price': double.tryParse(
-                  dailyPriceController.text.trim(),
+                  dailyPriceController.text
+                      .trim(),
                 ) ??
                 0,
             'monthly_price': double.tryParse(
-                  monthlyPriceController.text.trim(),
+                  monthlyPriceController.text
+                      .trim(),
                 ) ??
                 0,
             'availability': 'Available',
@@ -197,9 +257,22 @@ class _AddSpacePageState extends State<AddSpacePage> {
           .select()
           .single();
 
+      // Convert Supabase response to SpaceModel
+      final SpaceModel space =
+          SpaceModel.fromJson(
+        Map<String, dynamic>.from(
+          spaceData,
+        ),
+      );
+
+      debugPrint(
+        'Space created: ${space.id}',
+      );
+
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
           content: Text(
             'Space added successfully ✨',
@@ -210,13 +283,18 @@ class _AddSpacePageState extends State<AddSpacePage> {
 
       Navigator.pop(context, true);
     } catch (e) {
-      debugPrint('Add space error: $e');
+      debugPrint(
+        'Add space error: $e',
+      );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
           SnackBar(
-            content: Text('Error adding space: $e'),
-            backgroundColor: Colors.red.shade700,
+            content:
+                Text('Error adding space: $e'),
+            backgroundColor:
+                Colors.red.shade700,
           ),
         );
       }
@@ -244,7 +322,8 @@ class _AddSpacePageState extends State<AddSpacePage> {
       return const Scaffold(
         backgroundColor: cream,
         body: Center(
-          child: CircularProgressIndicator(
+          child:
+              CircularProgressIndicator(
             color: brown,
           ),
         ),
@@ -256,33 +335,39 @@ class _AddSpacePageState extends State<AddSpacePage> {
       appBar: AppBar(
         backgroundColor: cream,
         elevation: 0,
-        iconTheme: const IconThemeData(
+        iconTheme:
+            const IconThemeData(
           color: darkBrown,
         ),
         title: const Text(
           'Add New Space',
           style: TextStyle(
             color: darkBrown,
-            fontWeight: FontWeight.bold,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
+        padding:
+            const EdgeInsets.fromLTRB(
           22,
           10,
           22,
           35,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             const Text(
               'List your space',
               style: TextStyle(
                 fontSize: 29,
-                fontWeight: FontWeight.bold,
-                fontStyle: FontStyle.italic,
+                fontWeight:
+                    FontWeight.bold,
+                fontStyle:
+                    FontStyle.italic,
                 color: darkBrown,
               ),
             ),
@@ -302,19 +387,30 @@ class _AddSpacePageState extends State<AddSpacePage> {
             // VERIFICATION CARD
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(17),
-              decoration: BoxDecoration(
+              padding:
+                  const EdgeInsets.all(17),
+              decoration:
+                  BoxDecoration(
                 color: isVerified
-                    ? const Color(0xffEEE5DB)
-                    : const Color(0xffF1E2D8),
-                borderRadius: BorderRadius.circular(20),
+                    ? const Color(
+                        0xffEEE5DB,
+                      )
+                    : const Color(
+                        0xffF1E2D8,
+                      ),
+                borderRadius:
+                    BorderRadius.circular(
+                  20,
+                ),
               ),
               child: Row(
                 children: [
                   Icon(
                     isVerified
-                        ? Icons.verified_rounded
-                        : Icons.warning_amber_rounded,
+                        ? Icons
+                            .verified_rounded
+                        : Icons
+                            .warning_amber_rounded,
                     color: brown,
                     size: 29,
                   ),
@@ -322,25 +418,35 @@ class _AddSpacePageState extends State<AddSpacePage> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                          CrossAxisAlignment
+                              .start,
                       children: [
                         Text(
                           isVerified
                               ? 'Owner Verified'
                               : 'Verification Required',
-                          style: const TextStyle(
-                            color: darkBrown,
-                            fontWeight: FontWeight.bold,
+                          style:
+                              const TextStyle(
+                            color:
+                                darkBrown,
+                            fontWeight:
+                                FontWeight
+                                    .bold,
                             fontSize: 16,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(
+                            height: 4),
                         Text(
                           isVerified
-                              ? '${verification?['full_name'] ?? profile?['full_name'] ?? ''} • ${verification?['ownership_type'] ?? ''}'
+                              ? '${verification?.fullName ?? profile?.fullName ?? ''} • ${verification?.ownershipType ?? ''}'
                               : 'Complete owner verification before adding a space.',
-                          style: const TextStyle(
-                            color: Color(0xff806F61),
+                          style:
+                              const TextStyle(
+                            color:
+                                Color(
+                              0xff806F61,
+                            ),
                             fontSize: 12,
                           ),
                         ),
@@ -364,7 +470,8 @@ class _AddSpacePageState extends State<AddSpacePage> {
               'Space Type',
               style: TextStyle(
                 color: darkBrown,
-                fontWeight: FontWeight.w600,
+                fontWeight:
+                    FontWeight.w600,
               ),
             ),
 
@@ -372,37 +479,51 @@ class _AddSpacePageState extends State<AddSpacePage> {
 
             Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: fieldColor,
-                borderRadius: BorderRadius.circular(15),
+                  const EdgeInsets
+                      .symmetric(
+                horizontal: 14,
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
+              decoration:
+                  BoxDecoration(
+                color: fieldColor,
+                borderRadius:
+                    BorderRadius.circular(
+                  15,
+                ),
+              ),
+              child:
+                  DropdownButtonHideUnderline(
+                child:
+                    DropdownButton<String>(
                   value: selectedType,
                   isExpanded: true,
                   items: const [
                     DropdownMenuItem(
                       value: 'Parking',
-                      child: Text('Parking'),
+                      child:
+                          Text('Parking'),
                     ),
                     DropdownMenuItem(
                       value: 'Storage',
-                      child: Text('Storage'),
+                      child:
+                          Text('Storage'),
                     ),
                     DropdownMenuItem(
                       value: 'Basement',
-                      child: Text('Basement'),
+                      child:
+                          Text('Basement'),
                     ),
                     DropdownMenuItem(
                       value: 'Other',
-                      child: Text('Other'),
+                      child:
+                          Text('Other'),
                     ),
                   ],
                   onChanged: (value) {
                     if (value != null) {
                       setState(() {
-                        selectedType = value;
+                        selectedType =
+                            value;
                       });
                     }
                   },
@@ -429,21 +550,24 @@ class _AddSpacePageState extends State<AddSpacePage> {
               'Size (m²)',
               sizeController,
               'Example: 45',
-              keyboardType: TextInputType.number,
+              keyboardType:
+                  TextInputType.number,
             ),
 
             field(
               'Daily Price (SAR)',
               dailyPriceController,
               'Example: 80',
-              keyboardType: TextInputType.number,
+              keyboardType:
+                  TextInputType.number,
             ),
 
             field(
               'Monthly Price (SAR)',
               monthlyPriceController,
               'Example: 1600',
-              keyboardType: TextInputType.number,
+              keyboardType:
+                  TextInputType.number,
             ),
 
             const SizedBox(height: 8),
@@ -452,25 +576,36 @@ class _AddSpacePageState extends State<AddSpacePage> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: saving ? null : saveSpace,
-                style: ElevatedButton.styleFrom(
+                onPressed:
+                    saving ? null : saveSpace,
+                style:
+                    ElevatedButton.styleFrom(
                   backgroundColor: brown,
-                  foregroundColor: Colors.white,
+                  foregroundColor:
+                      Colors.white,
                   disabledBackgroundColor:
-                      const Color(0xffB9A99B),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(17),
+                      const Color(
+                    0xffB9A99B,
+                  ),
+                  shape:
+                      RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(
+                      17,
+                    ),
                   ),
                 ),
                 child: saving
                     ? const CircularProgressIndicator(
-                        color: Colors.white,
+                        color:
+                            Colors.white,
                       )
                     : const Text(
                         'Add Space',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontWeight:
+                              FontWeight.bold,
                         ),
                       ),
               ),

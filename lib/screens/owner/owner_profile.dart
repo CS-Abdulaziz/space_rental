@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/profile_model.dart';
+import '../../models/space_model.dart';
+import '../../models/booking_model.dart';
+import '../../models/verification_model.dart';
+
 import '../auth/login_page.dart';
 import 'verification.dart';
 
@@ -25,15 +30,10 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
   bool loading = true;
   bool loggingOut = false;
 
-  String fullName = 'Owner';
-  String email = '';
-  String phone = '';
-
-  int spacesCount = 0;
-  int bookingsCount = 0;
-  double earnings = 0;
-
-  String verificationStatus = 'Not Submitted';
+  ProfileModel? profile;
+  List<SpaceModel> spaces = [];
+  List<BookingModel> bookings = [];
+  VerificationModel? verification;
 
   @override
   void initState() {
@@ -55,55 +55,59 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
 
     try {
       // PROFILE
-      final profile = await supabase
+      final profileResult = await supabase
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
+      ProfileModel? loadedProfile;
+
+      if (profileResult != null) {
+        loadedProfile = ProfileModel.fromJson(
+          Map<String, dynamic>.from(profileResult),
+        );
+      }
+
       // SPACES
-      final spaces = await supabase
+      final spacesResult = await supabase
           .from('spaces')
-          .select('id')
+          .select()
           .eq('owner_id', user.id);
 
+      final loadedSpaces = spacesResult
+          .map(
+            (space) => SpaceModel.fromJson(
+              Map<String, dynamic>.from(space),
+            ),
+          )
+          .toList();
+
       // BOOKINGS
-      double totalEarnings = 0;
-      int totalBookings = 0;
+      final List<BookingModel> loadedBookings = [];
 
-      if (spaces.isNotEmpty) {
-        final spaceIds = spaces
-            .map((space) => space['id'].toString())
-            .toList();
+      if (loadedSpaces.isNotEmpty) {
+        final spaceIds =
+            loadedSpaces.map((space) => space.id).toList();
 
-        final bookings = await supabase
+        final bookingsResult = await supabase
             .from('bookings')
-            .select('total_price, status')
+            .select()
             .inFilter('space_id', spaceIds);
 
-        totalBookings = bookings.length;
-
-        for (final booking in bookings) {
-          final bookingStatus =
-              booking['status']?.toString();
-
-          if (bookingStatus == 'confirmed' ||
-              bookingStatus == 'completed') {
-            totalEarnings +=
-                double.tryParse(
-                      booking['total_price']
-                              ?.toString() ??
-                          '0',
-                    ) ??
-                    0;
-          }
+        for (final booking in bookingsResult) {
+          loadedBookings.add(
+            BookingModel.fromJson(
+              Map<String, dynamic>.from(booking),
+            ),
+          );
         }
       }
 
       // VERIFICATION
       final verificationResult = await supabase
           .from('verification')
-          .select('status')
+          .select()
           .eq('owner_id', user.id)
           .order(
             'submitted_at',
@@ -111,49 +115,37 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
           )
           .limit(1);
 
-      String currentVerificationStatus =
-          'Not Submitted';
+      VerificationModel? loadedVerification;
 
       if (verificationResult.isNotEmpty) {
-        currentVerificationStatus =
-            verificationResult.first['status']
-                    ?.toString() ??
-                'Pending';
+        loadedVerification =
+            VerificationModel.fromJson(
+          Map<String, dynamic>.from(
+            verificationResult.first,
+          ),
+        );
+      }
+
+      double totalEarnings = 0;
+
+      for (final booking in loadedBookings) {
+        if (booking.status == 'confirmed' ||
+            booking.status == 'completed') {
+          totalEarnings += booking.totalPrice ?? 0;
+        }
       }
 
       if (!mounted) return;
 
       setState(() {
-        fullName =
-            profile?['full_name']
-                        ?.toString()
-                        .trim()
-                        .isNotEmpty ==
-                    true
-                ? profile!['full_name'].toString()
-                : 'Owner';
-
-        email =
-            profile?['email']?.toString() ??
-                user.email ??
-                '';
-
-        phone =
-            profile?['phone']?.toString() ?? '';
-
-        spacesCount = spaces.length;
-        bookingsCount = totalBookings;
-        earnings = totalEarnings;
-
-        verificationStatus =
-            currentVerificationStatus;
-
+        profile = loadedProfile;
+        spaces = loadedSpaces;
+        bookings = loadedBookings;
+        verification = loadedVerification;
         loading = false;
       });
     } catch (e) {
-      debugPrint(
-        'OWNER PROFILE ERROR: $e',
-      );
+      debugPrint('OWNER PROFILE ERROR: $e');
 
       if (!mounted) return;
 
@@ -161,6 +153,57 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
         loading = false;
       });
     }
+  }
+
+  String get fullName {
+    final name = profile?.fullName.trim();
+
+    if (name != null && name.isNotEmpty) {
+      return name;
+    }
+
+    return 'Owner';
+  }
+
+  String get email {
+    return profile?.email.isNotEmpty == true
+        ? profile!.email
+        : supabase.auth.currentUser?.email ?? '';
+  }
+
+  String get phone {
+    return profile?.phone ?? '';
+  }
+
+  int get spacesCount {
+    return spaces.length;
+  }
+
+  int get bookingsCount {
+    return bookings.length;
+  }
+
+  double get earnings {
+    double total = 0;
+
+    for (final booking in bookings) {
+      if (booking.status == 'confirmed' ||
+          booking.status == 'completed') {
+        total += booking.totalPrice ?? 0;
+      }
+    }
+
+    return total;
+  }
+
+  String get verificationStatus {
+    if (verification == null) {
+      return 'Not Submitted';
+    }
+
+    return verification!.status.isNotEmpty
+        ? verification!.status
+        : 'Pending';
   }
 
   Color verificationColor() {
@@ -287,22 +330,16 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                     _verificationTile(),
 
                     _profileTile(
-                      icon:
-                          Icons.person_outline_rounded,
-                      title:
-                          'Personal Information',
-                      subtitle:
-                          'Name, email and phone',
-                      onTap:
-                          _showPersonalInfo,
+                      icon: Icons.person_outline_rounded,
+                      title: 'Personal Information',
+                      subtitle: 'Name, email and phone',
+                      onTap: _showPersonalInfo,
                     ),
 
                     _profileTile(
-                      icon:
-                          Icons.settings_outlined,
+                      icon: Icons.settings_outlined,
                       title: 'Settings',
-                      subtitle:
-                          'App preferences',
+                      subtitle: 'App preferences',
                       onTap: _showSettings,
                     ),
 
@@ -369,8 +406,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
           height: 46,
           decoration: BoxDecoration(
             color: softCream,
-            borderRadius:
-                BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(15),
           ),
           child: const Icon(
             Icons.person_outline_rounded,
@@ -391,12 +427,10 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: brown,
-        borderRadius:
-            BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color:
-                Colors.black.withOpacity(.10),
+            color: Colors.black.withOpacity(.10),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -411,8 +445,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
               color: const Color(0xffE8D8C8),
               shape: BoxShape.circle,
               border: Border.all(
-                color:
-                    Colors.white.withOpacity(.25),
+                color: Colors.white.withOpacity(.25),
                 width: 2,
               ),
             ),
@@ -438,13 +471,11 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                 Text(
                   fullName,
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 21,
-                    fontWeight:
-                        FontWeight.w700,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
 
@@ -453,8 +484,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                 Text(
                   email,
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -525,15 +555,13 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
     IconData icon,
   ) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         vertical: 17,
         horizontal: 8,
       ),
       decoration: BoxDecoration(
         color: white,
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: const Color(0xffE5D9CC),
         ),
@@ -552,8 +580,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
             value,
             style: const TextStyle(
               fontSize: 17,
-              fontWeight:
-                  FontWeight.w700,
+              fontWeight: FontWeight.w700,
               color: darkBrown,
             ),
           ),
@@ -588,13 +615,11 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
     return GestureDetector(
       onTap: openVerification,
       child: Container(
-        margin:
-            const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: white,
-          borderRadius:
-              BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: const Color(0xffE5D9CC),
           ),
@@ -606,8 +631,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
               height: 45,
               decoration: BoxDecoration(
                 color: softCream,
-                borderRadius:
-                    BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 verificationIcon(),
@@ -625,8 +649,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                   const Text(
                     'Verification',
                     style: TextStyle(
-                      fontWeight:
-                          FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                       color: darkBrown,
                     ),
                   ),
@@ -637,10 +660,8 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                     verificationStatus,
                     style: TextStyle(
                       fontSize: 12,
-                      color:
-                          verificationColor(),
-                      fontWeight:
-                          FontWeight.w600,
+                      color: verificationColor(),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -667,13 +688,11 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin:
-            const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: white,
-          borderRadius:
-              BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: const Color(0xffE5D9CC),
           ),
@@ -685,8 +704,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
               height: 45,
               decoration: BoxDecoration(
                 color: softCream,
-                borderRadius:
-                    BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 icon,
@@ -704,8 +722,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontWeight:
-                          FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                       color: darkBrown,
                     ),
                   ),
@@ -739,8 +756,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: softCream,
-        borderRadius:
-            BorderRadius.circular(23),
+        borderRadius: BorderRadius.circular(23),
       ),
       child: Row(
         children: [
@@ -749,12 +765,10 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
             height: 48,
             decoration: BoxDecoration(
               color: brown,
-              borderRadius:
-                  BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(15),
             ),
             child: const Icon(
-              Icons
-                  .account_balance_wallet_outlined,
+              Icons.account_balance_wallet_outlined,
               color: Colors.white,
             ),
           ),
@@ -781,8 +795,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                   style: const TextStyle(
                     color: darkBrown,
                     fontSize: 22,
-                    fontWeight:
-                        FontWeight.w800,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -803,25 +816,21 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: cream,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
         ),
       ),
       builder: (context) {
         return Padding(
-          padding:
-              const EdgeInsets.fromLTRB(
+          padding: const EdgeInsets.fromLTRB(
             22,
             20,
             22,
             30,
           ),
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
@@ -829,8 +838,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                 'Personal Information',
                 style: TextStyle(
                   fontSize: 22,
-                  fontWeight:
-                      FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                   color: darkBrown,
                 ),
               ),
@@ -852,9 +860,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
               _infoRow(
                 Icons.phone_outlined,
                 'Phone',
-                phone.isEmpty
-                    ? 'Not added'
-                    : phone,
+                phone.isEmpty ? 'Not added' : phone,
               ),
             ],
           ),
@@ -869,8 +875,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
     String value,
   ) {
     return Padding(
-      padding:
-          const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.only(bottom: 15),
       child: Row(
         children: [
           Icon(
@@ -897,13 +902,10 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                 const SizedBox(height: 2),
 
                 Text(
-                  value.isEmpty
-                      ? '-'
-                      : value,
+                  value.isEmpty ? '-' : value,
                   style: const TextStyle(
                     color: darkBrown,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -918,25 +920,21 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: cream,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
         ),
       ),
       builder: (context) {
         return Padding(
-          padding:
-              const EdgeInsets.fromLTRB(
+          padding: const EdgeInsets.fromLTRB(
             22,
             20,
             22,
             30,
           ),
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
@@ -944,8 +942,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
                 'Settings',
                 style: TextStyle(
                   fontSize: 22,
-                  fontWeight:
-                      FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                   color: darkBrown,
                 ),
               ),
@@ -953,8 +950,7 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
               const SizedBox(height: 20),
 
               _settingsRow(
-                Icons
-                    .notifications_none_rounded,
+                Icons.notifications_none_rounded,
                 'Notifications',
               ),
 
@@ -1017,14 +1013,12 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
       width: double.infinity,
       height: 54,
       child: OutlinedButton.icon(
-        onPressed:
-            loggingOut ? null : logout,
+        onPressed: loggingOut ? null : logout,
         icon: loggingOut
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child:
-                    CircularProgressIndicator(
+                child: CircularProgressIndicator(
                   strokeWidth: 2,
                   color: brown,
                 ),
@@ -1037,16 +1031,13 @@ class _OwnerProfilePageState extends State<OwnerProfilePage> {
               ? 'Logging out...'
               : 'Log Out',
         ),
-        style:
-            OutlinedButton.styleFrom(
+        style: OutlinedButton.styleFrom(
           foregroundColor: brown,
           side: const BorderSide(
             color: Color(0xffCBB7A4),
           ),
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(17),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(17),
           ),
         ),
       ),
