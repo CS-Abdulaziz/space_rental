@@ -777,135 +777,168 @@ class _OwnerHomePageState extends State<OwnerHomePage>
   // OVERVIEW
   // ============================================================
 
-  Widget _statsGrid() {
+ Widget _statsGrid() {
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
-      physics:
-          const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.45,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 14,
+      mainAxisSpacing: 14,
+      childAspectRatio: 0.98, // مساحة إضافية لتوضيح الأعمدة والكلام
       children: [
         _statCard(
-          Icons.home_work_outlined,
-          'Listed Spaces',
-          '${spaces.length}',
-          'active listings',
-          beige,
+          icon: Icons.home_outlined,
+          title: 'Listed Spaces',
+          value: '${spaces.length}',
+          growth: '+12% from last month',
+          chartType: _StatChartType.bars1,
         ),
         _statCard(
-          Icons.calendar_month_outlined,
-          'Bookings',
-          '${bookings.length}',
-          '$confirmedBookings confirmed',
-          const Color(0xFFE4D6CC),
+          icon: Icons.calendar_today_outlined,
+          title: 'Bookings',
+          value: '${bookings.length}',
+          growth: '+100% from last month',
+          chartType: _StatChartType.line,
         ),
         _statCard(
-          Icons.hourglass_top_rounded,
-          'Pending',
-          '$pendingBookings',
-          'needs attention',
-          const Color(0xFFEBDCC9),
+          icon: Icons.hourglass_empty_rounded,
+          title: 'Pending',
+          value: '$pendingBookings',
+          growth: '+5% from last month',
+          chartType: _StatChartType.line,
         ),
         _statCard(
-          Icons.payments_outlined,
-          'Earnings',
-          formatPrice(earnings),
-          'confirmed bookings',
-          const Color(0xFFE0D4C7),
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Earnings',
+          value: formatPrice(earnings),
+          growth: '+100% from last month',
+          chartType: _StatChartType.bars2,
         ),
       ],
     );
   }
 
   // ============================================================
-  // BEAUTIFIED STAT CARD
+  // STAT CARD (MATCHING NEW DESIGN)
   // ============================================================
 
-  Widget _statCard(
-    IconData icon,
-    String title,
-    String value,
-    String subtitle,
-    Color iconBg,
-  ) {
+  Widget _statCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required String growth,
+    required _StatChartType chartType,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFCF8),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFFE9DED2),
-          width: 1,
+          color: const Color(0xFFEFE6DC),
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: brown.withOpacity(.09),
-            blurRadius: 24,
-            spreadRadius: 0,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Colors.white.withOpacity(.80),
-            blurRadius: 8,
-            spreadRadius: -2,
-            offset: const Offset(0, -2),
+            color: brown.withOpacity(.04),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header: Icon + Title + Corner Arrow
           Row(
             children: [
               Container(
-                width: 43,
-                height: 43,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: iconBg.withOpacity(.52),
-                  borderRadius:
-                      BorderRadius.circular(15),
-                  border: Border.all(
-                    color: Colors.white
-                        .withOpacity(.85),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          brown.withOpacity(.07),
-                      blurRadius: 9,
-                      offset:
-                          const Offset(0, 4),
-                    ),
-                  ],
+                  color: const Color(0xFFF4EDE4),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   icon,
                   color: darkBrown,
-                  size: 21,
+                  size: 19,
                 ),
               ),
-
-              const Spacer(),
-
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3EBE2),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 1,
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: darkBrown.withOpacity(.90),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+              ),
+              // Corner Share/Outward Arrow
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F2EA),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Icon(
-                  Icons.arrow_outward_rounded,
+                  Icons.north_east_rounded,
                   size: 14,
-                  color: brown.withOpacity(.62),
+                  color: brown.withOpacity(.60),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Large Value
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: darkBrown,
+              fontSize: 25,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Georgia',
+              letterSpacing: -.5,
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          // Enlarged Growth Indicator (الكلام الأخضر المكبر)
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32).withOpacity(.12),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Icon(
+                  Icons.north_east_rounded,
+                  color: Color(0xFF2E7D32),
+                  size: 13,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  growth,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF2E7D32),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -913,41 +946,12 @@ class _OwnerHomePageState extends State<OwnerHomePage>
 
           const Spacer(),
 
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: darkBrown,
-              fontSize: 23,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Georgia',
-              letterSpacing: -.3,
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: darkBrown.withOpacity(.88),
-              fontWeight: FontWeight.w600,
-              fontSize: 11.5,
-            ),
-          ),
-
-          const SizedBox(height: 3),
-
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: brown.withOpacity(.50),
-              fontSize: 9.5,
+          // Enlarged Mini Visual Chart (الشرطات والمنحنى المكبر)
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: CustomPaint(
+              painter: _MiniChartPainter(chartType: chartType),
             ),
           ),
         ],
@@ -2153,4 +2157,120 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       (route) => false,
     );
   }
+}
+
+// ============================================================
+// MINI CHART PAINTERS & ENUM
+// ============================================================
+
+enum _StatChartType { bars1, bars2, line }
+
+class _MiniChartPainter extends CustomPainter {
+  final _StatChartType chartType;
+
+  _MiniChartPainter({required this.chartType});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (chartType == _StatChartType.line) {
+      _drawLineChart(canvas, size);
+    } else {
+      _drawBarChart(canvas, size, chartType);
+    }
+  }
+
+  void _drawBarChart(Canvas canvas, Size size, _StatChartType type) {
+    final List<double> heights = type == _StatChartType.bars1
+        ? [0.4, 0.55, 0.9, 0.5, 0.75, 0.45, 0.85, 0.6, 1.0]
+        : [0.35, 0.45, 0.6, 0.75, 0.88, 1.0];
+
+    final double totalGaps = (heights.length - 1) * 5.0;
+    final double barWidth = (size.width - totalGaps) / heights.length;
+
+    for (int i = 0; i < heights.length; i++) {
+      final double h = size.height * heights[i];
+      final double left = i * (barWidth + 5.0);
+      final double top = size.height - h;
+
+      final paint = Paint()
+        ..color = Color.lerp(
+          const Color(0xFFDCC8B7),
+          const Color(0xFF8D6853),
+          heights[i],
+        )!
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(left, top, barWidth, h),
+          const Radius.circular(3),
+        ),
+        paint,
+      );
+    }
+  }
+
+  void _drawLineChart(Canvas canvas, Size size) {
+    final path = Path();
+    
+    // البداية من أسفل اليسار
+    path.moveTo(0, size.height * 0.85);
+
+    // صعود مائل وسلس نحو القمة الأولى في المنتصف
+    path.cubicTo(
+      size.width * 0.20, size.height * 0.70,
+      size.width * 0.32, size.height * 0.35,
+      size.width * 0.46, size.height * 0.32, // قمة التموج الأول
+    );
+
+    // نزول خفيف (قاع التموج) ثم صعود شاهق لأعلى اليمين
+    path.cubicTo(
+      size.width * 0.60, size.height * 0.48,
+      size.width * 0.74, size.height * 0.40,
+      size.width * 0.94, size.height * 0.08, // أعلى نقطة في اليمين
+    );
+
+    // التظليل الناعم أسفل المنحنى
+    final fillPath = Path.from(path)
+      ..lineTo(size.width * 0.94, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFFA68068).withOpacity(0.30),
+          const Color(0xFFA68068).withOpacity(0.0),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+
+    canvas.drawPath(fillPath, fillPaint);
+
+    // رسم الخط المتعرج
+    final linePaint = Paint()
+      ..color = const Color(0xFFA68068)
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas.drawPath(path, linePaint);
+
+    // النقطة البنية في أقصى اليمين بالأعلى
+    final dotPaint = Paint()
+      ..color = const Color(0xFF6B483B)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(
+      Offset(size.width * 0.94, size.height * 0.08),
+      3.6,
+      dotPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

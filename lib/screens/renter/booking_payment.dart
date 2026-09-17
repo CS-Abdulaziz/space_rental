@@ -61,6 +61,32 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
   double get totalPrice => rentalPrice + serviceFee;
 
+  DateTime _calculateOneMonthLater(DateTime start) {
+    return DateTime(start.year, start.month + 1, start.day);
+  }
+
+  void _showCustomSnackBar(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Color(0xffddd7d0)),
+        ),
+        elevation: 4,
+        content: Text(
+          message,
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> selectStartDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -76,21 +102,25 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
     setState(() {
       startDate = picked;
 
-      if (endDate != null && endDate!.isBefore(picked)) {
-        endDate = null;
+      if (rentalType == 'monthly') {
+        endDate = _calculateOneMonthLater(picked);
+      } else {
+        if (endDate != null && endDate!.isBefore(picked)) {
+          endDate = null;
+        }
       }
     });
   }
 
   Future<void> selectEndDate() async {
     if (startDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select the start date first.'),
-        ),
-      );
+      _showCustomSnackBar('Please select the start date first.');
       return;
     }
+
+    final DateTime earliestEndDate = rentalType == 'monthly'
+        ? startDate!.add(const Duration(days: 29))
+        : startDate!;
 
     final picked = await showDatePicker(
       context: context,
@@ -98,10 +128,22 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
       lastDate: DateTime.now().add(
         const Duration(days: 365),
       ),
-      initialDate: endDate ?? startDate!,
+      initialDate: (endDate != null && endDate!.isAfter(earliestEndDate))
+          ? endDate!
+          : earliestEndDate,
     );
 
     if (picked == null) return;
+
+    final days = picked.difference(startDate!).inDays + 1;
+
+    if (rentalType == 'monthly' && days < 30) {
+      if (!mounted) return;
+      _showCustomSnackBar(
+        'Sorry, the booking duration must be at least a full month (30 days).',
+      );
+      return;
+    }
 
     setState(() {
       endDate = picked;
@@ -112,28 +154,23 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
     final user = supabase.auth.currentUser;
 
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please log in first.'),
-        ),
-      );
+      _showCustomSnackBar('Please log in first.');
       return;
     }
 
     if (startDate == null || endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select your start and end dates.'),
-        ),
-      );
+      _showCustomSnackBar('Please select your start and end dates.');
       return;
     }
 
     if (totalDays <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select valid dates.'),
-        ),
+      _showCustomSnackBar('Please select valid dates.');
+      return;
+    }
+
+    if (rentalType == 'monthly' && totalDays < 30) {
+      _showCustomSnackBar(
+        'The booking cannot be completed: You have selected the "monthly" booking type; the duration must be a full month (at least 30 days).',
       );
       return;
     }
@@ -151,7 +188,6 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
       final selectedEnd =
           endDate!.toIso8601String().split('T').first;
 
-      // Check existing bookings for this space
       final existingBookings = await supabase
           .from('bookings')
           .select('id, start_date, end_date, status')
@@ -173,8 +209,6 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         final bookingEnd =
             DateTime.parse(booking['end_date'].toString());
 
-        // Check if the new booking overlaps
-        // with an existing booking.
         if (!newEnd.isBefore(bookingStart) &&
             !newStart.isAfter(bookingEnd)) {
           alreadyBooked = true;
@@ -182,7 +216,6 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         }
       }
 
-      // Space is already booked
       if (alreadyBooked) {
         if (!mounted) return;
 
@@ -194,9 +227,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           context: context,
           builder: (_) {
             return AlertDialog(
-              title: const Text(
-                'Space Already Booked',
-              ),
+              title: const Text('Space Already Booked'),
               content: const Text(
                 'This space is already booked for these dates. '
                 'Please choose different dates or another space.',
@@ -216,7 +247,6 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         return;
       }
 
-      // Create booking
       final bookingResponse = await supabase
           .from('bookings')
           .insert({
@@ -235,14 +265,12 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           .select()
           .single();
 
-      // Convert JSON response to BookingModel
       final BookingModel booking = BookingModel.fromJson(
         Map<String, dynamic>.from(bookingResponse),
       );
 
       final bookingId = booking.id;
 
-      // Demo payment
       final transactionReference =
           'DEMO-PAY-${DateTime.now().millisecondsSinceEpoch}';
 
@@ -262,15 +290,12 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         processing = false;
       });
 
-      // Success dialog
       await showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) {
           return AlertDialog(
-            title: const Text(
-              'Booking Confirmed',
-            ),
+            title: const Text('Booking Confirmed'),
             content: Text(
               'Your booking has been confirmed.\n\n'
               'Total: ${totalPrice.toStringAsFixed(2)} SAR',
@@ -289,12 +314,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
       if (!mounted) return;
 
-      // Tell renter_home that a booking was created
       Navigator.pop(context, true);
     } catch (e) {
-      debugPrint(
-        'Booking/payment error: $e',
-      );
+      debugPrint('Booking/payment error: $e');
 
       if (!mounted) return;
 
@@ -302,13 +324,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         processing = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Payment failed: $e',
-          ),
-        ),
-      );
+      _showCustomSnackBar('Payment failed: $e');
     }
   }
 
@@ -330,8 +346,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
             ),
           ),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
@@ -369,14 +384,10 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         });
       },
       child: Container(
-        margin: const EdgeInsets.only(
-          bottom: 12,
-        ),
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(17),
         decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xfff0ece6)
-              : Colors.white,
+          color: selected ? const Color(0xfff0ece6) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: selected
@@ -397,8 +408,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
             ),
             const SizedBox(width: 14),
             Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
@@ -446,15 +456,9 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-          18,
-          10,
-          18,
-          30,
-        ),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               widget.space['title'] ?? 'Space',
@@ -463,18 +467,14 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 fontWeight: FontWeight.w700,
               ),
             ),
-
             const SizedBox(height: 5),
-
             Text(
               widget.space['address'] ?? 'Riyadh',
               style: const TextStyle(
                 color: Color(0xff77716b),
               ),
             ),
-
             const SizedBox(height: 25),
-
             const Text(
               'Rental type',
               style: TextStyle(
@@ -482,16 +482,13 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 fontWeight: FontWeight.w700,
               ),
             ),
-
             const SizedBox(height: 12),
-
             Row(
               children: [
                 Expanded(
                   child: ChoiceChip(
                     label: Text(
-                      'Daily • '
-                      '${dailyPrice.toStringAsFixed(0)} SAR',
+                      'Daily • ${dailyPrice.toStringAsFixed(0)} SAR',
                     ),
                     selected: rentalType == 'daily',
                     onSelected: (_) {
@@ -505,22 +502,22 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 Expanded(
                   child: ChoiceChip(
                     label: Text(
-                      'Monthly • '
-                      '${monthlyPrice.toStringAsFixed(0)} SAR',
+                      'Monthly • ${monthlyPrice.toStringAsFixed(0)} SAR',
                     ),
                     selected: rentalType == 'monthly',
                     onSelected: (_) {
                       setState(() {
                         rentalType = 'monthly';
+                        if (startDate != null) {
+                          endDate = _calculateOneMonthLater(startDate!);
+                        }
                       });
                     },
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 25),
-
             const Text(
               'Choose dates',
               style: TextStyle(
@@ -528,18 +525,14 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 fontWeight: FontWeight.w700,
               ),
             ),
-
             const SizedBox(height: 12),
-
             Row(
               children: [
                 dateBox(
                   title: 'Start date',
                   value: startDate == null
                       ? 'Select date'
-                      : '${startDate!.day}/'
-                          '${startDate!.month}/'
-                          '${startDate!.year}',
+                      : '${startDate!.day}/${startDate!.month}/${startDate!.year}',
                   onTap: selectStartDate,
                 ),
                 const SizedBox(width: 12),
@@ -547,16 +540,12 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                   title: 'End date',
                   value: endDate == null
                       ? 'Select date'
-                      : '${endDate!.day}/'
-                          '${endDate!.month}/'
-                          '${endDate!.year}',
+                      : '${endDate!.day}/${endDate!.month}/${endDate!.year}',
                   onTap: selectEndDate,
                 ),
               ],
             ),
-
             const SizedBox(height: 28),
-
             const Text(
               'Payment method',
               style: TextStyle(
@@ -564,25 +553,20 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 fontWeight: FontWeight.w700,
               ),
             ),
-
             const SizedBox(height: 12),
-
             paymentOption(
               title: 'Card',
               subtitle: 'Demo payment',
               icon: Icons.credit_card_outlined,
               value: 'card',
             ),
-
             paymentOption(
               title: 'Wallet',
               subtitle: 'Demo payment',
               icon: Icons.account_balance_wallet_outlined,
               value: 'wallet',
             ),
-
             const SizedBox(height: 18),
-
             const Text(
               'Price breakdown',
               style: TextStyle(
@@ -590,9 +574,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 fontWeight: FontWeight.w700,
               ),
             ),
-
             const SizedBox(height: 12),
-
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -619,30 +601,24 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 22),
-
             SizedBox(
               width: double.infinity,
               height: 58,
               child: ElevatedButton(
-                onPressed:
-                    processing ? null : confirmPayment,
+                onPressed: processing ? null : confirmPayment,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      const Color(0xff716960),
+                  backgroundColor: const Color(0xff716960),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(30),
                   ),
                 ),
                 child: processing
                     ? const SizedBox(
                         height: 23,
                         width: 23,
-                        child:
-                            CircularProgressIndicator(
+                        child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
@@ -673,9 +649,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           title,
           style: TextStyle(
             fontSize: bold ? 18 : 16,
-            fontWeight: bold
-                ? FontWeight.w700
-                : FontWeight.normal,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
           ),
         ),
         const Spacer(),
@@ -683,9 +657,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           value,
           style: TextStyle(
             fontSize: bold ? 18 : 16,
-            fontWeight: bold
-                ? FontWeight.w700
-                : FontWeight.normal,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
           ),
         ),
       ],
