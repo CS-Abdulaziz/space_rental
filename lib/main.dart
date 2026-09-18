@@ -5,13 +5,19 @@ import 'screens/auth/login_page.dart';
 import 'screens/auth/signup_page.dart';
 import 'screens/renter/renter_home.dart';
 import 'screens/owner/owner_home.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await dotenv.load(fileName: ".env");
+
   await Supabase.initialize(
-    url: '....',
-    anonKey: '....',
+
+    url: dotenv.env['supabase_url']!,
+
+    anonKey: dotenv.env['supabase_key']!,
+
   );
 
   runApp(const SpaceOraApp());
