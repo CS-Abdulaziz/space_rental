@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../models/profile_model.dart';
 import '../../models/verification_model.dart';
@@ -16,7 +17,6 @@ class _AddSpacePageState extends State<AddSpacePage> {
   final supabase = Supabase.instance.client;
 
   final titleController = TextEditingController();
-  final descriptionController = TextEditingController();
   final addressController = TextEditingController();
   final sizeController = TextEditingController();
   final dailyPriceController = TextEditingController();
@@ -29,6 +29,13 @@ class _AddSpacePageState extends State<AddSpacePage> {
 
   ProfileModel? profile;
   VerificationModel? verification;
+
+  // =========================
+  // SPACE IMAGES
+  // =========================
+
+  final ImagePicker imagePicker = ImagePicker();
+  List<XFile> selectedImages = [];
 
   static const cream = Color(0xffFBF8F3);
   static const brown = Color(0xff765640);
@@ -171,6 +178,101 @@ class _AddSpacePageState extends State<AddSpacePage> {
     );
   }
 
+  // =========================
+  // PICK IMAGES
+  // =========================
+
+  Future<void> pickImages() async {
+    try {
+      final images =
+          await imagePicker.pickMultiImage(
+        imageQuality: 85,
+      );
+
+      if (images.isEmpty) return;
+
+      setState(() {
+        selectedImages = images.take(5).toList();
+      });
+
+      if (images.length > 5 && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          const SnackBar(
+            content: Text(
+              'You can upload up to 5 photos.',
+            ),
+            backgroundColor: brown,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        'Image picker error: $e',
+      );
+    }
+  }
+
+  // =========================
+  // REMOVE IMAGE
+  // =========================
+
+  void removeImage(int index) {
+    setState(() {
+      selectedImages.removeAt(index);
+    });
+  }
+
+  // =========================
+  // UPLOAD IMAGES
+  // =========================
+
+  Future<void> uploadSpaceImages(
+    String spaceId,
+    String userId,
+  ) async {
+    for (int i = 0;
+        i < selectedImages.length;
+        i++) {
+      final image = selectedImages[i];
+
+      final bytes = await image.readAsBytes();
+
+      final originalName = image.name;
+
+      String extension = 'jpg';
+
+      if (originalName.contains('.')) {
+        extension =
+            originalName.split('.').last;
+      }
+
+      final filePath =
+          '$userId/${spaceId}_${DateTime.now().millisecondsSinceEpoch}_$i.$extension';
+
+      await supabase.storage
+          .from('space-images')
+          .uploadBinary(
+            filePath,
+            bytes,
+            fileOptions: const FileOptions(
+              upsert: false,
+            ),
+          );
+
+      final imageUrl = supabase.storage
+          .from('space-images')
+          .getPublicUrl(filePath);
+
+      await supabase
+          .from('space_images')
+          .insert({
+        'space_id': spaceId,
+        'image_url': imageUrl,
+      });
+    }
+  }
+
   Future<void> saveSpace() async {
     final user = supabase.auth.currentUser;
 
@@ -190,9 +292,6 @@ class _AddSpacePageState extends State<AddSpacePage> {
     }
 
     if (titleController.text.trim().isEmpty ||
-        descriptionController.text
-            .trim()
-            .isEmpty ||
         addressController.text
             .trim()
             .isEmpty ||
@@ -215,6 +314,19 @@ class _AddSpacePageState extends State<AddSpacePage> {
       return;
     }
 
+    if (selectedImages.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please add at least one photo of your space.',
+          ),
+          backgroundColor: brown,
+        ),
+      );
+      return;
+    }
+
     setState(() => saving = true);
 
     try {
@@ -229,9 +341,7 @@ class _AddSpacePageState extends State<AddSpacePage> {
             'title':
                 titleController.text.trim(),
             'type': selectedType,
-            'description':
-                descriptionController.text
-                    .trim(),
+            'description': '',
             'address':
                 addressController.text.trim(),
             'latitude': 24.7136,
@@ -267,6 +377,15 @@ class _AddSpacePageState extends State<AddSpacePage> {
 
       debugPrint(
         'Space created: ${space.id}',
+      );
+
+      // =========================
+      // UPLOAD SPACE IMAGES
+      // =========================
+
+      await uploadSpaceImages(
+        space.id,
+        user.id,
       );
 
       if (!mounted) return;
@@ -308,7 +427,6 @@ class _AddSpacePageState extends State<AddSpacePage> {
   @override
   void dispose() {
     titleController.dispose();
-    descriptionController.dispose();
     addressController.dispose();
     sizeController.dispose();
     dailyPriceController.dispose();
@@ -533,11 +651,247 @@ class _AddSpacePageState extends State<AddSpacePage> {
 
             const SizedBox(height: 18),
 
-            field(
-              'Description',
-              descriptionController,
-              'Describe your space...',
-              maxLines: 4,
+            // =========================
+            // SPACE PHOTOS
+            // =========================
+
+            Padding(
+              padding:
+                  const EdgeInsets.only(
+                bottom: 17,
+              ),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Space Photos',
+                        style: TextStyle(
+                          color: darkBrown,
+                          fontWeight:
+                              FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${selectedImages.length}/5',
+                        style: const TextStyle(
+                          color:
+                              Color(0xff806F61),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  GestureDetector(
+                    onTap: selectedImages.length >= 5
+                        ? null
+                        : pickImages,
+                    child: Container(
+                      width: double.infinity,
+                      height:
+                          selectedImages.isEmpty
+                              ? 155
+                              : 180,
+                      decoration:
+                          BoxDecoration(
+                        color: fieldColor,
+                        borderRadius:
+                            BorderRadius.circular(
+                          18,
+                        ),
+                        border: Border.all(
+                          color: brown
+                              .withOpacity(.25),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: selectedImages
+                              .isEmpty
+                          ? Column(
+                              mainAxisAlignment:
+                                  MainAxisAlignment
+                                      .center,
+                              children: [
+                                Container(
+                                  height: 50,
+                                  width: 50,
+                                  decoration:
+                                      BoxDecoration(
+                                    color:
+                                        const Color(
+                                      0xffE9DED3,
+                                    ),
+                                    borderRadius:
+                                        BorderRadius
+                                            .circular(
+                                      15,
+                                    ),
+                                  ),
+                                  child:
+                                      const Icon(
+                                    Icons
+                                        .add_photo_alternate_outlined,
+                                    color:
+                                        brown,
+                                    size: 27,
+                                  ),
+                                ),
+                                const SizedBox(
+                                  height: 10,
+                                ),
+                                const Text(
+                                  'Add photos of your space',
+                                  style:
+                                      TextStyle(
+                                    color:
+                                        darkBrown,
+                                    fontWeight:
+                                        FontWeight
+                                            .w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(
+                                  height: 4,
+                                ),
+                                const Text(
+                                  'Tap to choose photos from your gallery',
+                                  style:
+                                      TextStyle(
+                                    color:
+                                        Color(
+                                      0xff806F61,
+                                    ),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Padding(
+                              padding:
+                                  const EdgeInsets
+                                      .all(10),
+                              child: GridView.builder(
+                                physics:
+                                    const NeverScrollableScrollPhysics(),
+                                itemCount:
+                                    selectedImages.length,
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing:
+                                      8,
+                                  mainAxisSpacing:
+                                      8,
+                                ),
+                                itemBuilder:
+                                    (context,
+                                        index) {
+                                  final image =
+                                      selectedImages[
+                                          index];
+
+                                  return Stack(
+                                    fit: StackFit
+                                        .expand,
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius:
+                                            BorderRadius
+                                                .circular(
+                                          12,
+                                        ),
+                                        child:
+                                            Image.network(
+                                          image.path,
+                                          fit: BoxFit
+                                              .cover,
+                                          errorBuilder:
+                                              (context,
+                                                  error,
+                                                  stackTrace) {
+                                            return Container(
+                                              color:
+                                                  const Color(
+                                                0xffE9DED3,
+                                              ),
+                                              child:
+                                                  const Icon(
+                                                Icons
+                                                    .image_outlined,
+                                                color:
+                                                    brown,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+
+                                      Positioned(
+                                        top: 5,
+                                        right: 5,
+                                        child:
+                                            GestureDetector(
+                                          onTap: () =>
+                                              removeImage(
+                                            index,
+                                          ),
+                                          child:
+                                              Container(
+                                            height:
+                                                25,
+                                            width:
+                                                25,
+                                            decoration:
+                                                const BoxDecoration(
+                                              color:
+                                                  Colors.white,
+                                              shape:
+                                                  BoxShape.circle,
+                                            ),
+                                            child:
+                                                const Icon(
+                                              Icons.close,
+                                              size:
+                                                  15,
+                                              color:
+                                                  darkBrown,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  if (selectedImages.isNotEmpty)
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(
+                        top: 7,
+                      ),
+                      child: Text(
+                        'You can add up to 5 photos.',
+                        style:
+                            const TextStyle(
+                          color:
+                              Color(0xff806F61),
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
 
             field(
