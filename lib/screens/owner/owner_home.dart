@@ -782,9 +782,9 @@ class _OwnerHomePageState extends State<OwnerHomePage>
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 14,
-      mainAxisSpacing: 14,
-      childAspectRatio: 0.98, // مساحة إضافية لتوضيح الأعمدة والكلام
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 0.88, // يعطي ارتفاعاً ممتازاً يمنع الـ overflow على شاشات الجوال
       children: [
         _statCard(
           icon: Icons.home_outlined,
@@ -830,10 +830,10 @@ class _OwnerHomePageState extends State<OwnerHomePage>
     required _StatChartType chartType,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFCF8),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: const Color(0xFFEFE6DC),
           width: 1.2,
@@ -841,31 +841,31 @@ class _OwnerHomePageState extends State<OwnerHomePage>
         boxShadow: [
           BoxShadow(
             color: brown.withOpacity(.04),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Icon + Title + Corner Arrow
+          // Header: Icon + Title + Arrow
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF4EDE4),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   icon,
                   color: darkBrown,
-                  size: 19,
+                  size: 17,
                 ),
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   title,
@@ -873,29 +873,28 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: darkBrown.withOpacity(.90),
-                    fontSize: 13.5,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              // Corner Share/Outward Arrow
               Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F2EA),
-                  borderRadius: BorderRadius.circular(8),
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF2E7DC),
+                  shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.north_east_rounded,
-                  size: 14,
-                  color: brown.withOpacity(.60),
+                child: const Icon(
+                  Icons.arrow_outward_rounded,
+                  size: 13,
+                  color: Color(0xFF765548),
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
           // Large Value
           Text(
@@ -904,31 +903,31 @@ class _OwnerHomePageState extends State<OwnerHomePage>
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: darkBrown,
-              fontSize: 25,
+              fontSize: 22,
               fontWeight: FontWeight.w800,
               fontFamily: 'Georgia',
               letterSpacing: -.5,
             ),
           ),
 
-          const SizedBox(height: 5),
+          const SizedBox(height: 3),
 
-          // Enlarged Growth Indicator (الكلام الأخضر المكبر)
+          // Growth Indicator
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(2.5),
+                padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
                   color: const Color(0xFF2E7D32).withOpacity(.12),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Icon(
-                  Icons.north_east_rounded,
+                  Icons.arrow_outward_rounded,
                   color: Color(0xFF2E7D32),
-                  size: 13,
+                  size: 10.5,
                 ),
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   growth,
@@ -936,22 +935,23 @@ class _OwnerHomePageState extends State<OwnerHomePage>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF2E7D32),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ],
           ),
 
-          const Spacer(),
+          const SizedBox(height: 6),
 
-          // Enlarged Mini Visual Chart (الشرطات والمنحنى المكبر)
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: CustomPaint(
-              painter: _MiniChartPainter(chartType: chartType),
+          // مرن ويتكيف مع ارتفاع الكارد بدون Overflow
+          Expanded(
+            child: SizedBox(
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _MiniChartPainter(chartType: chartType),
+              ),
             ),
           ),
         ],
@@ -2213,24 +2213,24 @@ class _MiniChartPainter extends CustomPainter {
   void _drawLineChart(Canvas canvas, Size size) {
     final path = Path();
     
-    // البداية من أسفل اليسار
-    path.moveTo(0, size.height * 0.85);
+    // يبدأ من الثلث السفلي
+    path.moveTo(0, size.height * 0.78);
 
-    // صعود مائل وسلس نحو القمة الأولى في المنتصف
+    // تموج أول: قمة ناعمة ثم نزول
     path.cubicTo(
-      size.width * 0.20, size.height * 0.70,
-      size.width * 0.32, size.height * 0.35,
-      size.width * 0.46, size.height * 0.32, // قمة التموج الأول
+      size.width * 0.16, size.height * 0.45,
+      size.width * 0.32, size.height * 0.88,
+      size.width * 0.50, size.height * 0.48, // قمة التموج الأوسط
     );
 
-    // نزول خفيف (قاع التموج) ثم صعود شاهق لأعلى اليمين
+    // تموج ثانٍ: نزول خفيف ثم صعود مرتفع جداً لليمين
     path.cubicTo(
-      size.width * 0.60, size.height * 0.48,
-      size.width * 0.74, size.height * 0.40,
-      size.width * 0.94, size.height * 0.08, // أعلى نقطة في اليمين
+      size.width * 0.64, size.height * 0.72,
+      size.width * 0.78, size.height * 0.45,
+      size.width * 0.94, size.height * 0.12, // النقطة العالية
     );
 
-    // التظليل الناعم أسفل المنحنى
+    // تظليل ناعم تحت الخط
     final fillPath = Path.from(path)
       ..lineTo(size.width * 0.94, size.height)
       ..lineTo(0, size.height)
@@ -2241,7 +2241,7 @@ class _MiniChartPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFFA68068).withOpacity(0.30),
+          const Color(0xFFA68068).withOpacity(0.28),
           const Color(0xFFA68068).withOpacity(0.0),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
@@ -2249,7 +2249,7 @@ class _MiniChartPainter extends CustomPainter {
 
     canvas.drawPath(fillPath, fillPaint);
 
-    // رسم الخط المتعرج
+    // رسم المنحنى
     final linePaint = Paint()
       ..color = const Color(0xFFA68068)
       ..strokeWidth = 2.2
@@ -2259,14 +2259,14 @@ class _MiniChartPainter extends CustomPainter {
 
     canvas.drawPath(path, linePaint);
 
-    // النقطة البنية في أقصى اليمين بالأعلى
+    // نقطة القمة
     final dotPaint = Paint()
-      ..color = const Color(0xFF6B483B)
+      ..color = const Color(0xFF765548)
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(
-      Offset(size.width * 0.94, size.height * 0.08),
-      3.6,
+      Offset(size.width * 0.94, size.height * 0.12),
+      3.5,
       dotPaint,
     );
   }
