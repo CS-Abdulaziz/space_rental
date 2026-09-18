@@ -10,8 +10,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
-    url: 'https://yricmfxnruipcgfrmozq.supabase.co',
-    anonKey: 'sb_publishable_2B4zCj5Eef11BzV7VCPGfw_19OsV4Lb',
+    url: '....',
+    anonKey: '....',
   );
 
   runApp(const SpaceOraApp());
