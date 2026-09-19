@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/booking_model.dart';
 import '../../models/profile_model.dart';
 import '../../models/space_model.dart';
-import '../auth/login_page.dart';
 import 'booking_payment.dart';
 
 class RenterHomePage extends StatefulWidget {

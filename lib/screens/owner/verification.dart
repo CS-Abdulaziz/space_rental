@@ -195,17 +195,15 @@ class _VerificationPageState extends State<VerificationPage> {
         const Duration(seconds: 5),
       );
 
-      if (verificationId != null) {
-        await supabase
-            .from('verification')
-            .update({
-          'status': 'approved',
-        }).eq(
-          'id',
-          verificationId,
-        );
-      }
-
+      await supabase
+          .from('verification')
+          .update({
+        'status': 'approved',
+      }).eq(
+        'id',
+        verificationId,
+      );
+    
       if (!mounted) return;
 
       setState(() {

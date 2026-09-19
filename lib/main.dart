@@ -1,26 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'screens/auth/login_page.dart';
 import 'screens/auth/signup_page.dart';
 import 'screens/renter/renter_home.dart';
 import 'screens/owner/owner_home.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: ".env");
+await dotenv.load(fileName: '.env');
 
-  await Supabase.initialize(
+final supabaseUrl = dotenv.env['supabase_url']?.trim();
+final supabaseKey = dotenv.env['supabase_key'];
 
-    url: dotenv.env['supabase_url']!,
+debugPrint('KEY VALUE: $supabaseKey');
+debugPrint('KEY LENGTH: ${supabaseKey?.length}');
 
-    anonKey: dotenv.env['supabase_key']!,
+if (supabaseUrl == null || supabaseUrl.isEmpty) {
+  throw Exception('Supabase URL is missing');
+}
 
-  );
+if (supabaseKey == null || supabaseKey.isEmpty) {
+  throw Exception('Supabase Key is missing');
+}
 
+await Supabase.initialize(
+  url: supabaseUrl,
+  publishableKey: supabaseKey,
+);
 
+//<<<<<<< HEAD
+
+//=======
+//>>>>>>> 27c0810844d66c0ea0fc4e639b5b4c51ae8f6950
 
   runApp(const SpaceOraApp());
 }
@@ -44,11 +58,9 @@ class SpaceOraApp extends StatelessWidget {
 
       routes: {
         '/renter': (context) => RenterHomePage(),
-
         '/login': (context) => LoginPage(),
-
         '/owner': (context) => const OwnerHomePage(),
-        '/signup':(context) => SignupPage(),
+        '/signup': (context) => SignupPage(),
       },
     );
   }
