@@ -10,7 +10,9 @@ import 'screens/owner/owner_home.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-await dotenv.load(fileName: '.env');
+try {
+  await dotenv.load(fileName: '.env');
+} catch (_) {}
 
 final supabaseUrl = dotenv.env['supabase_url']?.trim();
 final supabaseKey = dotenv.env['supabase_key'];
